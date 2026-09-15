@@ -6,8 +6,6 @@ import { FindingLocation } from './FindingLocation';
 import { RunTrace } from './RunTrace';
 import { loadReviewMarks, reviewKey, reviewRank, updateReviewMark, type ReviewStatus } from '../lib/review-state';
 import '../report.css';
-import '../issue-workspace.css';
-import '../report-refinement.css';
 
 const priority = { critical: 0, serious: 1, moderate: 2, minor: 3 };
 const labels: Record<FindingDisposition, string> = { confirmed: 'Confirmed by a tool', review: 'Check manually', suggestion: 'Good practice', unverified: 'Unverified observation' };
@@ -34,10 +32,14 @@ function FindingDetail({ audit, finding, reviewStatus, onReview }: { audit: Audi
   const location = findingLocation(audit, finding);
   const disposition = findingDisposition(finding);
   const copy = findingCopy(finding);
+  const foundBy = finding.profileIds.map(id => profiles.find(profile => profile.id === id)?.name ?? id).join(', ');
   return <article className="selected-issue" aria-labelledby="selected-issue-title">
     <header className="selected-issue-header">
-      <div><p className="issue-eyebrow">{location.page?.title || 'Captured page'}</p><h2 id="selected-issue-title">{copy.title}</h2></div>
-      <span className={`report-label report-label-${disposition}`}>{labels[disposition]}{disposition === 'confirmed' ? ` · ${finding.severity}` : ''}</span>
+      <div className="selected-issue-title">
+        <span className={`report-label report-label-${disposition}`}>{labels[disposition]}{disposition === 'confirmed' ? ` · ${finding.severity}` : ''}</span>
+        <h2 id="selected-issue-title">{copy.title}</h2>
+        <p className="issue-meta">{foundBy && <span>Found by <strong>{foundBy}</strong></span>}<span>{location.page?.title || 'Captured page'}</span></p>
+      </div>
       <div className="finding-review-actions" role="group" aria-label="Review status">
         {reviewStatus === 'open' && <button type="button" className="quiet-button" onClick={() => onReview('seen')}>Mark as seen</button>}
         {reviewStatus !== 'resolved' && <button type="button" className="quiet-button" onClick={() => onReview('resolved')}>Mark as resolved</button>}
@@ -45,10 +47,11 @@ function FindingDetail({ audit, finding, reviewStatus, onReview }: { audit: Audi
       </div>
     </header>
     <div className="report-item-body">
-      <FindingLocation audit={audit} finding={finding}>
+      <div className="finding-guidance">
         {finding.observation && <section className="finding-observation"><h3>What we observed</h3><p>{finding.observation}</p></section>}
         <section className="finding-fix"><h3>How to fix it</h3><p>{copy.recommendation}</p></section>
-      </FindingLocation>
+      </div>
+      <FindingLocation audit={audit} finding={finding} />
       <details className="report-technical"><summary>Technical details</summary>
         <div className="technical-links">
           {finding.wcag.map(ref => <a href={ref.url} target="_blank" rel="noreferrer" key={ref.id}>{ref.id} {ref.title}</a>)}
@@ -129,11 +132,11 @@ function AuditReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: () =
   const confirmedTotal = all.filter(f => findingDisposition(f) === 'confirmed').length;
   return <main className="report-main report-calm">
     <header className="report-heading"><div><p className="report-context">{audit.demo ? 'Sample audit' : 'Website audit'} · {humanDate(audit.updatedAt)}</p><h1>Accessibility report</h1><p className="report-site">{audit.request.url}</p></div>
-      <div className="report-actions"><button className="quiet-button" onClick={onNewAudit}>New audit</button><button className="quiet-button" onClick={() => downloadFile(`blindspot-${audit.id}.json`, JSON.stringify({ ...audit, manualReview: { scope: 'this browser', marks: review.marks } }, null, 2), 'application/json')}>JSON</button><button className="quiet-button" onClick={() => downloadFile(`blindspot-${audit.id}.md`, buildMarkdown(audit, window.location.origin) + '\n\n## Manual review\n\nSaved in this browser. Resolved does not mean retested.\n\n' + report.findings.map(f => `- ${findingCopy(f).title}, ${review.marks[f.id] ?? 'open'}`).join('\n'), 'text/markdown')}>Markdown</button></div>
+      <div className="report-actions"><button className="quiet-button" onClick={onNewAudit}>New audit</button><div className="export-group" role="group" aria-label="Export"><button className="quiet-button" onClick={() => downloadFile(`blindspot-${audit.id}.json`, JSON.stringify({ ...audit, manualReview: { scope: 'this browser', marks: review.marks } }, null, 2), 'application/json')}>JSON</button><button className="quiet-button" onClick={() => downloadFile(`blindspot-${audit.id}.md`, buildMarkdown(audit, window.location.origin) + '\n\n## Manual review\n\nSaved in this browser. Resolved does not mean retested.\n\n' + report.findings.map(f => `- ${findingCopy(f).title}, ${review.marks[f.id] ?? 'open'}`).join('\n'), 'text/markdown')}>Markdown</button></div></div>
     </header>
     <div className="report-command-bar">
       <div className="result-switcher" role="group" aria-label="Result categories">{(Object.keys(categoryNames) as FindingDisposition[]).map(kind => <button key={kind} type="button" aria-pressed={category === kind} onClick={() => setCategory(kind)}><span className={`issue-dot issue-dot-${kind === 'confirmed' ? 'urgent' : kind}`} aria-hidden="true" />{categoryNames[kind]}<span className="category-count">{visible.filter(f => findingDisposition(f) === kind).length}</span></button>)}</div>
-      <span className="run-outcome">{report.scenarioOutcome === 'completed' ? 'Scenario completed' : report.scenarioOutcome === 'blocked' ? 'Scenario blocked' : 'Partial audit'}</span>
+      <span className="run-outcome" data-outcome={report.scenarioOutcome}>{report.scenarioOutcome === 'completed' ? 'Scenario completed' : report.scenarioOutcome === 'blocked' ? 'Scenario blocked' : 'Partial audit'}</span>
     </div>
     <div className="review-feedback" role="status">{lastChange && <><span>{lastChange.status === 'open' ? 'Finding reopened.' : lastChange.status === 'seen' ? 'Finding marked as seen.' : 'Finding marked as resolved.'}</span><button type="button" className="quiet-button" onClick={() => mark(lastChange.id, lastChange.previous, true)}>Undo</button></>}</div>
     {review.warning && <p className="review-warning" role="alert">{review.warning}</p>}
