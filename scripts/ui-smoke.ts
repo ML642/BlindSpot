@@ -29,7 +29,10 @@ try {
   await page.reload();
   await page.getByRole('heading', { name: 'Accessibility report' }).waitFor();
   assert.equal(await page.locator('.report-secondary[open]').count(), 0);
-  await page.locator('.report-primary .report-item > summary').first().click();
+  await page.locator('.issue-list-row').last().click();
+  assert.equal(await page.locator('.issue-list-row[aria-pressed=true]').count(), 1);
+  assert.equal(await page.locator('#selected-issue-title').innerText(), 'Text contrast is too low');
+  await page.locator('.issue-list-row').first().click();
   const location = page.getByRole('region', { name: 'Issue location' });
   assert.equal(await location.locator('.finding-page-link').getAttribute('href'), 'https://sample.blindspot.example/sign-in');
   const screenshot = location.getByRole('img');
@@ -47,6 +50,36 @@ try {
   await location.screenshot({ path: path.join(os.tmpdir(), 'blindspot-finding-location.png') });
   const downloaded = page.waitForEvent('download'); await page.getByRole('button', { name: 'JSON', exact: true }).click();
   assert.match((await downloaded).suggestedFilename(), /\.json$/);
+  // Exercise report category changes, including a genuinely empty selection.
+  await page.getByRole('combobox', { name: 'Results', exact: true }).selectOption('suggestion');
+  await page.getByRole('heading', { name: 'No finding to display' }).waitFor();
+  await page.getByRole('combobox', { name: 'Results', exact: true }).selectOption('confirmed');
+  const savedAudit = await (await page.request.get(`${url}/api/audits/${new URL(page.url()).searchParams.get('audit')}`)).json();
+  let failTrace = true;
+  await page.route('**/api/audits/*/events?after=0', route => route.fulfill({ status: failTrace ? 503 : 200, contentType: 'application/json', body: JSON.stringify(failTrace ? { error: 'Fixture unavailable' } : { events: [
+    { id: 1, timestamp: savedAudit.createdAt, type: 'navigation', message: 'Opened sign-in page', pageStateId: savedAudit.pageStates[0].id },
+    { id: 2, timestamp: savedAudit.updatedAt, type: 'warning', message: 'Fixture warning without a capture' },
+  ] }) }));
+  await page.getByText('Run trace · debug', { exact: true }).click();
+  await page.getByRole('alert').filter({ hasText: 'Could not load the event log' }).waitFor();
+  failTrace = false;
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await page.getByRole('button', { name: /Opened sign-in page/ }).click();
+  const traceDetails = page.getByRole('region', { name: 'Trace entry details' });
+  await traceDetails.getByRole('img').evaluate((img: HTMLImageElement) => img.decode());
+  assert.equal(await traceDetails.getByRole('link', { name: 'Rendered DOM', exact: true }).count(), 1);
+  await page.getByRole('combobox', { name: 'Show', exact: true }).selectOption('warnings');
+  await traceDetails.getByText('This event has no linked page capture.', { exact: false }).waitFor();
+  assert.equal(await traceDetails.getByRole('img').count(), 0);
+  await page.getByRole('combobox', { name: 'Show', exact: true }).selectOption('pages');
+  const traceDownload = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Download trace', exact: true }).click();
+  assert.match((await traceDownload).suggestedFilename(), /-trace\.json$/);
+  const traceAxe = await new AxeBuilder({ page }).analyze();
+  assert.equal(traceAxe.violations.length, 0, JSON.stringify(traceAxe.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => n.target) }))));
+  await page.locator('.run-trace').screenshot({ path: path.join(os.tmpdir(), 'blindspot-trace.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'Mobile trace overflow');
   console.log(JSON.stringify({ url, homeAxe: homeAxe.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => ({ target: n.target, reason: n.failureSummary })) })), reportAxe: reportAxe.violations.map(v => ({ id: v.id, nodes: v.nodes.map(n => ({ target: n.target, reason: n.failureSummary })) })), errors, screenshots: [homeShot, mobileShot, reportShot, reportMobile] }, null, 2));
   assert.equal(homeAxe.violations.length, 0, 'Home accessibility violations');
   assert.equal(reportAxe.violations.length, 0, 'Report accessibility violations');

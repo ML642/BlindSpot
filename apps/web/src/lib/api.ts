@@ -13,6 +13,6 @@ export async function apiJson<T>(path: string, options?: RequestInit): Promise<T
 }
 
 export const getAudit = (id: string) => apiJson<Audit>(`/audits/${encodeURIComponent(id)}`);
-export const getEvents = (id: string, after: number) => apiJson<{ events: AuditEvent[] }>(`/audits/${encodeURIComponent(id)}/events?after=${after}`);
+export const getEvents = (id: string, after: number, signal?: AbortSignal) => apiJson<{ events: AuditEvent[] }>(`/audits/${encodeURIComponent(id)}/events?after=${after}`, { signal });
 export const getHealth = () => apiJson<Health>('/health');
 export const artifactUrl = (auditId: string, artifactId?: string) => artifactId ? `${API}/audits/${encodeURIComponent(auditId)}/artifacts/${encodeURIComponent(artifactId)}` : undefined;
