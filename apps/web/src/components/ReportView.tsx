@@ -37,13 +37,13 @@ function FindingRow({ audit, finding }: { audit: Audit; finding: Finding }) {
       <span className={`report-label report-label-${disposition}`}>{labels[disposition]}</span>
     </summary>
     {open && <div className="report-item-body">
-      <p>{finding.description}</p>
-      {finding.observation && <p><strong>Observed:</strong> {finding.observation}</p>}
-      <h3>What to do</h3><p>{copy.recommendation}</p>
-      <h3>Why it matters</h3><p>{copy.impact}</p>
-      <FindingLocation audit={audit} finding={finding} />
+      <FindingLocation audit={audit} finding={finding}>
+        {finding.observation && <section className="finding-observation"><h3>What we observed</h3><p>{finding.observation}</p></section>}
+        <section className="finding-fix"><h3>How to fix it</h3><p>{copy.recommendation}</p></section>
+        <section className="finding-impact"><h3>Why it matters</h3><p>{copy.impact}</p></section>
+      </FindingLocation>
       <details className="report-technical"><summary>Evidence and technical details</summary>
-        <p>Original finding: {finding.title}</p><p>{finding.recommendation}</p>
+        <p>Original finding: {finding.title}</p><p>{finding.description}</p><p>{finding.recommendation}</p>
         <p>Reported impact: {finding.severity}. {labels[disposition]} — impact does not indicate certainty.</p>
         <p>Affected profiles: {finding.profileIds.map(id => profiles.find(p => p.id === id)?.name ?? id).join(', ')}.</p>
         <h4>Evidence</h4>
