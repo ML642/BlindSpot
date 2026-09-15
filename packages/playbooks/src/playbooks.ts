@@ -71,11 +71,6 @@ const defs: Record<ProfileId, PlaybookDefinition> = {
     tool('hover-only', 'Hover and focus alternatives', 'Find hover-dependent content that may be inaccessible to keyboard and imprecise pointer use.', WCAG.hoverFocusContent),
     gemini('forgiving-errors', 'Forgiving recovery', 'Review confirmation, undo, timing and destructive-action placement.', WCAG.errorPrevention, WCAG.pointerCancellation),
   ], wcag(WCAG.targetSize, WCAG.pointerCancellation, WCAG.hoverFocusContent, WCAG.errorPrevention)),
-  speech: definition('speech', 'Speech impairments', 'Communication', 'Alternatives to voice-only interactions.', 'A user who cannot speak clearly can complete every action without speech input.', [
-    tool('voice-alternative', 'Non-voice alternative', 'Find voice-only prompts or microphone controls and request an equivalent input path.', WCAG.keyboard, WCAG.pointerGestures),
-    tool('labels', 'Clear visible labels', 'Ensure controls and instructions make non-verbal operation discoverable.', WCAG.labelsInstructions, WCAG.labelInName),
-    gemini('communication-flow', 'Communication-independent flow', 'Review voice verification, voice search and spoken confirmation requirements.', WCAG.keyboard),
-  ], wcag(WCAG.keyboard, WCAG.labelsInstructions, WCAG.labelInName)),
   cognitive: definition('cognitive', 'Cognitive disabilities', 'Cognition', 'Clear instructions, predictable flows and helpful errors.', 'A user with cognitive disabilities can predict what happens, understand instructions and recover from errors.', [
     tool('labels-errors', 'Labels and error identification', 'Inspect labels, required hints, inline errors and status regions.', WCAG.labelsInstructions, WCAG.errorIdentification, WCAG.errorSuggestion),
     tool('predictable-input', 'Predictable interaction', 'Find input-change handlers and focus-driven navigation signals needing review.', WCAG.onFocus, WCAG.onInput),
@@ -116,11 +111,6 @@ const defs: Record<ProfileId, PlaybookDefinition> = {
     tool('media-alternatives', 'Independent media alternatives', 'Find audio, video and motion without equivalent controls or text.', WCAG.captionsPrerecorded, WCAG.audioControl),
     gemini('temporary-context', 'Temporary limitation scenario', 'Review the supplied scenario for one-handed, reduced-vision, muted-audio or migraine-friendly completion.', WCAG.keyboard, WCAG.reflow),
   ], wcag(WCAG.keyboard, WCAG.targetSize, WCAG.captionsPrerecorded, WCAG.audioControl, WCAG.reflow)),
-  situational: definition('situational', 'Situational limitations', 'Context', 'One-handed use, muted audio and difficult environments.', 'A user in bright sunlight, a noisy room, holding a baby or on a poor connection can complete the scenario.', [
-    tool('visual-alternatives', 'Visual and text alternatives', 'Find audio-only information and color-only indicators requiring alternatives.', WCAG.audioControl, WCAG.useOfColor, WCAG.statusMessages),
-    tool('reflow-targets', 'Responsive, touch-friendly flow', 'Inspect narrow layouts, overflow and small targets.', WCAG.reflow, WCAG.targetSize),
-    gemini('situational-flow', 'Resilient situational flow', 'Review one-handed operation, muted audio, sunlight contrast, poor connection and preserved progress.', WCAG.reflow, WCAG.statusMessages),
-  ], wcag(WCAG.audioControl, WCAG.useOfColor, WCAG.reflow, WCAG.targetSize, WCAG.statusMessages)),
 };
 
 export const PLAYBOOKS = defs;

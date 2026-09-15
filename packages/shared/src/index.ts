@@ -9,7 +9,6 @@ export const profiles = [
  { id: 'motor', name: 'Motor & dexterity', group: 'Movement', description: 'Keyboard access, generous targets and alternatives to dragging.' },
  { id: 'paralysis', name: 'Limited limb movement', group: 'Movement', description: 'Keyboard, switch and voice-control compatibility.' },
  { id: 'tremors', name: 'Tremors', group: 'Movement', description: 'Target spacing, forgiving actions and hover alternatives.' },
- { id: 'speech', name: 'Speech impairments', group: 'Communication', description: 'Alternatives to voice-only interactions.' },
  { id: 'cognitive', name: 'Cognitive disabilities', group: 'Cognition', description: 'Clear instructions, predictable flows and helpful errors.' },
  { id: 'dyslexia', name: 'Learning & dyslexia', group: 'Cognition', description: 'Readable content, hierarchy and low memory demands.' },
  { id: 'adhd', name: 'Attention & ADHD', group: 'Cognition', description: 'Clear tasks, preserved progress and fewer distractions.' },
@@ -18,14 +17,13 @@ export const profiles = [
  { id: 'photosensitive', name: 'Photosensitivity', group: 'Sensory', description: 'Flashing content and seizure-related risks.' },
  { id: 'vestibular', name: 'Motion sensitivity', group: 'Sensory', description: 'Reduced motion and alternatives to forced movement.' },
  { id: 'temporary', name: 'Temporary impairments', group: 'Context', description: 'Short-term limitations such as an injury or migraine.' },
- { id: 'situational', name: 'Situational limitations', group: 'Context', description: 'One-handed use, muted audio and difficult environments.' },
 ] as const;
 export type ProfileId = typeof profiles[number]['id'];
 export const profileIds = profiles.map(p => p.id) as [ProfileId, ...ProfileId[]];
 export const auditRequestSchema = z.object({
  url: z.string().url().max(2048).refine(value => ['http:', 'https:'].includes(new URL(value).protocol), 'Use an HTTP or HTTPS URL'),
  scenario: z.string().trim().min(10).max(2000),
- profileIds: z.array(z.enum(profileIds)).min(1).max(18).transform(ids => [...new Set(ids)]),
+ profileIds: z.array(z.enum(profileIds)).min(1).max(profiles.length).transform(ids => [...new Set(ids)]),
 });
 export type AuditRequest = z.infer<typeof auditRequestSchema>;
 export type AuditStatus = 'queued' | 'running' | 'completed' | 'partial' | 'failed' | 'cancelled';

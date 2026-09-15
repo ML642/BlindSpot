@@ -368,7 +368,7 @@ export async function runAutomatedChecks(context: CheckerContext, requestedProfi
     }
   }
   if (probes.reflow.horizontalOverflow && probes.reflow.horizontalOverflow > 0) {
-    const p = ['low-vision', 'temporary', 'situational'].filter(id => selectedIds.has(id)) as ProfileId[];
+    const p = ['low-vision', 'temporary'].filter(id => selectedIds.has(id)) as ProfileId[];
     if (p.length) {
       const e = probes.evidence.find(item => item.description.startsWith('At 320px viewport width'))!;
       add(p, finding(context, { title: 'Page has horizontal overflow at narrow width', description: `The document was ${probes.reflow.horizontalOverflow}px wider than the viewport at 320px. Exceptions and the affected content still require human review.`, impact: 'People using high zoom or a narrow device may need two-dimensional scrolling to complete the task.', severity: 'serious', profileIds: p, recommendation: 'Make content reflow into one dimension at narrow widths and inspect any intentional exceptions.', wcag: [WCAG.reflow], status: 'needs_review' }, [e]), 'reflow', 'Responsive reflow', [e]);
@@ -426,21 +426,21 @@ export async function runAutomatedChecks(context: CheckerContext, requestedProfi
     }
   }
   if (signals.smallTargets.length) {
-    const p = ['motor', 'paralysis', 'tremors', 'temporary', 'situational'].filter(id => selectedIds.has(id)) as ProfileId[];
+    const p = ['motor', 'paralysis', 'tremors', 'temporary'].filter(id => selectedIds.has(id)) as ProfileId[];
     if (p.length) for (const signal of signals.smallTargets.slice(0, 30)) {
       const e = signalEvidence(context, 'measurement', `Interactive target measures ${signal.width}×${signal.height}px; automated check uses the WCAG 2.2 24×24px minimum signal.`, signal, `${signal.width}x${signal.height}px`);
       add(p, finding(context, { title: 'Interactive target may be too small', description: `The target is ${signal.width}×${signal.height}px in the captured viewport.`, impact: 'People with tremors or limited dexterity may activate adjacent controls accidentally.', severity: 'moderate', profileIds: p, recommendation: 'Make the target at least 24×24 CSS pixels or provide sufficient spacing and an applicable exception.', wcag: [WCAG.targetSize], status: 'needs_review' }, [e]), 'target-size', 'Target size', [e]);
     }
   }
   if (signals.mediaWithoutCaptions.length) {
-    const p = ['deafness', 'hard-of-hearing', 'temporary', 'situational'].filter(id => selectedIds.has(id)) as ProfileId[];
+    const p = ['deafness', 'hard-of-hearing', 'temporary'].filter(id => selectedIds.has(id)) as ProfileId[];
     if (p.length) for (const signal of signals.mediaWithoutCaptions) {
       const e = signalEvidence(context, 'dom', 'Video has no captions/subtitles track detected in its markup.', signal);
       add(p, finding(context, { title: 'Video has no captions track', description: 'The video element does not contain a captions or subtitles track.', impact: 'Deaf and hard-of-hearing users may miss spoken information.', severity: 'serious', profileIds: p, recommendation: 'Provide synchronized captions and verify their accuracy, timing and completeness.', wcag: [WCAG.captionsPrerecorded], status: 'needs_review' }, [e]), 'captions', 'Media captions', [e]);
     }
   }
   if (signals.autoplayMedia.length) {
-    const p = ['deafness', 'hard-of-hearing', 'autism', 'temporary', 'situational'].filter(id => selectedIds.has(id)) as ProfileId[];
+    const p = ['deafness', 'hard-of-hearing', 'autism', 'temporary'].filter(id => selectedIds.has(id)) as ProfileId[];
     if (p.length) for (const signal of signals.autoplayMedia) {
       const e = signalEvidence(context, 'dom', 'Media uses autoplay or loop.', signal);
       add(p, finding(context, { title: 'Media starts or loops automatically', description: 'The captured media markup includes autoplay or loop.', impact: 'Unexpected audio or movement can obscure information and create sensory barriers.', severity: 'moderate', profileIds: p, recommendation: 'Do not autoplay meaningful media; provide clear controls and a pause/stop mechanism.', wcag: [WCAG.audioControl], status: 'needs_review' }, [e]), 'autoplay', 'Autoplay media', [e]);

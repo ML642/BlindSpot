@@ -208,7 +208,8 @@ textarea { font-size: 14px; min-height: 175px; }
 .url-entry .primary-button { width: auto; min-width: 176px; min-height: 58px; margin: 0; padding-inline: 24px; font-size: 14px; }
 .wizard-step { transform-origin: top center; }
 .url-step, .scenario-step { width: min(780px, 100%); margin-right: auto; margin-left: auto; }
-.profiles-step .profile-groups { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 22px 28px; }
+.profiles-step .profile-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 36px; }
+.profiles-step .profile-column { display: flex; flex-direction: column; justify-content: space-between; gap: 28px; min-width: 0; }
 .wizard-step.is-entering { animation: wizard-step-in 360ms cubic-bezier(.16, 1, .3, 1) both; }
 .wizard-step.is-exiting { pointer-events: none; animation: wizard-step-out 220ms cubic-bezier(.4, 0, 1, 1) forwards; }
 .selected-url { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 11px 14px; margin-bottom: 24px; color: var(--soft); border: 1px solid var(--line); background: rgba(255,255,255,.7); font-size: 12px; }
@@ -233,7 +234,9 @@ textarea { font-size: 14px; min-height: 175px; }
   .simple-home .intro-column { margin-bottom: 30px; }
   .simple-home .intro-column h1 { font-size: clamp(44px, 13vw, 66px); }
   .simple-home .form-panel { padding: 0; }
-  .profiles-step .profile-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .profiles-step .profile-groups { display: block; columns: 2; column-gap: 24px; }
+  .profiles-step .profile-column { display: contents; }
+  .profiles-step .profile-group { display: inline-block; width: 100%; margin-bottom: 24px; break-inside: avoid; }
   .home-info { width: calc(100% - 36px); padding: 70px 0 80px; }
 }
 
@@ -243,6 +246,6 @@ textarea { font-size: 14px; min-height: 175px; }
   .home-hero { padding-inline: 14px; }
   .url-entry { display: block; }
   .url-entry .primary-button { width: 100%; margin-top: 10px; }
-  .profiles-step .profile-groups { grid-template-columns: 1fr; }
+  .profiles-step .profile-groups { columns: 1; }
   .simple-home .demo-divider { margin-top: 18px; }
 }
