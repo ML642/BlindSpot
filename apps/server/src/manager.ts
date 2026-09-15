@@ -35,7 +35,10 @@ export class AuditManager {
       const now = new Date().toISOString();
       const audit: Audit = { id: randomUUID(), request, status: 'queued', createdAt: now, updatedAt: now, pageStates: [], progress: { phase: 'Queued', completedProfiles: 0, totalProfiles: request.profileIds.length } };
       await this.store.saveAudit(audit); await this.store.saveEvents?.(audit.id, []);
-      void this.dispatch(audit).catch(() => this.fail(audit.id, 'The worker could not be started. Check the server configuration.'));
+      const dispatch = this.dispatch(audit).catch(() => this.fail(audit.id, 'The worker could not be started. Check the server configuration.'));
+      // Cloud Run may throttle CPU once the response ends. Submit the job before
+      // returning 202; only the separate job continues in the background.
+      if (this.config.executionMode === 'gcp') await dispatch;
       return audit;
     });
     this.admission = result.catch(() => undefined);

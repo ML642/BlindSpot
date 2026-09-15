@@ -1,26 +1,24 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { terminalStatuses } from '@blindspot/shared';
-import { apiJson, getAudit, getEvents, getHealth } from './lib/api';
-import type { Audit, AuditEvent, Health, Screen } from './lib/types';
+import { apiJson, getAudit, getEvents } from './lib/api';
+import type { Audit, AuditEvent, Screen } from './lib/types';
 import { HomeForm } from './components/HomeForm';
 import { Icon } from './components/Icon';
 import { ReportView } from './components/ReportView';
 import { RunningView } from './components/RunningView';
 
-function Header({ health, onHome }: { health: Health | null; onHome: () => void }) {
-  return <header className="site-header"><button className="brand" onClick={onHome} aria-label="BlindSpot home"><span className="brand-mark"><span /></span><span>blindspot</span></button><div className="header-meta"><span className="header-note">User journey accessibility</span><span className={`connection ${health?.geminiConfigured ? 'is-ready' : 'is-demo'}`}><span className="connection-dot" aria-hidden="true" />{health?.geminiConfigured ? 'Gemini configured' : health?.mode === 'unavailable' ? 'Service unavailable' : health ? 'Demo mode' : 'Checking service'}</span></div></header>;
+function Header({ onHome, onNavigate }: { onHome: () => void; onNavigate: (target: 'get-started' | 'info') => void }) {
+  return <header className="site-header"><button className="brand" onClick={onHome} aria-label="BlindSpot home"><span className="brand-mark"><span /></span><span>blindspot</span></button><nav className="site-nav" aria-label="Main navigation"><a href="#get-started" onClick={(event) => { event.preventDefault(); onNavigate('get-started'); }}>Get Started</a><a href="#info" onClick={(event) => { event.preventDefault(); onNavigate('info'); }}>Info</a></nav></header>;
 }
 
 export function App() {
   const [screen, setScreen] = useState<Screen>('form');
-  const [health, setHealth] = useState<Health | null>(null);
   const [audit, setAudit] = useState<Audit | null>(null);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [appError, setAppError] = useState('');
   const eventCursor = useRef(0);
 
   useEffect(() => {
-    getHealth().then(setHealth).catch(() => setHealth({ geminiConfigured: false, mode: 'unavailable' }));
     const savedId = new URLSearchParams(window.location.search).get('audit');
     if (!savedId) return;
     setScreen('running');
@@ -66,5 +64,12 @@ export function App() {
   };
 
   const home = () => { window.history.replaceState({}, '', window.location.pathname); setScreen('form'); setAudit(null); setEvents([]); setAppError(''); };
-  return <div className="app-shell"><a className="skip-link" href="#main-content">Skip to content</a><Header health={health} onHome={home} />{appError && <div className="global-alert" role="alert"><Icon name="x" size={16} />{appError}<button type="button" onClick={() => setAppError('')} aria-label="Dismiss message"><Icon name="x" size={15} /></button></div>}<div id="main-content" tabIndex={-1} />{screen === 'running' && !audit && <main className="running-main" aria-busy="true"><h1>Loading audit…</h1><p role="status">Retrieving the latest progress and evidence.</p></main>}{screen === 'form' && <HomeForm health={health} onStarted={startAudit} />}{screen === 'running' && audit && <RunningView audit={audit} events={events} onCancel={cancelAudit} />}{screen === 'report' && audit && <ReportView audit={audit} onNewAudit={home} />}<footer className="site-footer"><span>blindspot / 2026</span><span>Built for more ways to navigate</span><span>WCAG 2.2 · evidence-led review</span></footer></div>;
+  const navigateHome = (target: 'get-started' | 'info') => {
+    home();
+    window.history.replaceState({}, '', `${window.location.pathname}#${target}`);
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
+    });
+  };
+  return <div className="app-shell"><a className="skip-link" href="#main-content">Skip to content</a><Header onHome={home} onNavigate={navigateHome} />{appError && <div className="global-alert" role="alert"><Icon name="x" size={16} />{appError}<button type="button" onClick={() => setAppError('')} aria-label="Dismiss message"><Icon name="x" size={15} /></button></div>}<div id="main-content" tabIndex={-1} />{screen === 'running' && !audit && <main className="running-main" aria-busy="true"><h1>Loading audit…</h1><p role="status">Retrieving the latest progress and evidence.</p></main>}{screen === 'form' && <HomeForm onStarted={startAudit} />}{screen === 'running' && audit && <RunningView audit={audit} events={events} onCancel={cancelAudit} />}{screen === 'report' && audit && <ReportView audit={audit} onNewAudit={home} />}<footer className="site-footer"><span>blindspot / 2026</span><span>Built for more ways to navigate</span></footer></div>;
 }

@@ -31,6 +31,8 @@ test('browser captures a same-URL sign-in dialog with real DOM, ARIA and screens
   try {
     session = await BrowserSession.open({ startUrl: target, fixtureTarget: target, auditId: randomUUID(), store, signal: new AbortController().signal, emit() {}, maxActions: 30, maxPageStates: 5, timeoutMs: 10_000 });
     const before = session.snapshots[0];
+    assert.equal(before.axe.error, undefined, 'axe helper page must not be blocked as a popup');
+    assert.ok(before.axe.passes > 0, 'axe must actually run');
     const after = await session.click({ selector: '#open' });
     assert.equal(before.state.url, after.state.url);
     assert.notEqual(before.state.id, after.state.id);
@@ -41,6 +43,11 @@ test('browser captures a same-URL sign-in dialog with real DOM, ARIA and screens
     assert.equal(screenshot?.contentType, 'image/png');
     assert.ok((screenshot?.content.length ?? 0) > 1000);
     await assert.rejects(() => session!.type({ selector: '#password', text: 'secret' }), /credential|password/i);
+    const popupEvent = session.page.waitForEvent('popup');
+    await session.page.evaluate(() => window.open('about:blank'));
+    const popup = await popupEvent;
+    if (!popup.isClosed()) await once(popup, 'close');
+    assert.equal(popup.isClosed(), true, 'website popups remain blocked');
   } finally {
     await session?.close();
     await new Promise<void>(resolve => fixture.close(() => resolve()));

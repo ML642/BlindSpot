@@ -29,7 +29,7 @@ npm start
 
 `test:ui` checks the built app at desktop and mobile sizes, sample-report navigation, filters, export, and axe diagnostics. The sample runs real browser checks on a generated illustrative page, without Gemini.
 
-Known validation limits: live Gemini and GCP require your credentials and have not been exercised in this workspace. The dependency audit currently reports two moderate transitive alerts (`gaxios` / `uuid`); resolve these before exposing the service beyond a controlled hackathon demo.
+Live Gemini 3.8 Flash has been verified with a complete local one-profile audit of example.com. Individual results still require review; this smoke test is not a guarantee of correctness on arbitrary sites. The dependency audit currently reports two moderate transitive alerts (`gaxios` / `uuid`); resolve these before exposing the service beyond a controlled hackathon demo.
 
 ## What an audit does
 
@@ -46,6 +46,8 @@ The MVP explores public interfaces. A login scenario ends at the form, including
 Each check is `pass`, `fail`, `needs_review`, `not_applicable`, or `blocked`. Findings distinguish deterministic measurements (`tool`) from model judgement (`gemini`). A completed job means the audit process finished, not that the page conforms to WCAG.
 
 Automation cannot establish full accessibility. Caption presence does not establish caption accuracy; a DOM accessibility snapshot is not a screen-reader test; viewport reflow is not full browser zoom; motion detection is not certified flash-frequency analysis. The report retains these limitations and human-review tasks.
+
+Cloudflare challenge responses (`cf-mitigated: challenge`), recognizable Cloudflare verification interstitials, and main-page HTTP 403/429 stop the audit with a blocked scenario and preserved page evidence. These pages are not passed to accessibility checkers or Gemini specialists as if they were the requested site. Detection is conservative: simply embedding Turnstile or mentioning Cloudflare does not trigger a block. Existing time, action, page-state and model-turn limits remain the fallback for unrecognized stalls. BlindSpot does not solve challenges or impersonate verified bots; ask the site owner to authorize access or provide a staging environment. See [Cloudflare challenge detection](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/) and [verified bot authentication](https://developers.cloudflare.com/bots/reference/bot-verification/web-bot-auth/).
 
 Profiles cover vision, hearing, movement, speech, cognition, learning, attention, memory, sensory sensitivities, photosensitivity, motion sensitivity, temporary impairments, and situational limitations. Playbooks live in `packages/playbooks` and map applicable checks to [WCAG 2.2](https://www.w3.org/TR/WCAG22/).
 

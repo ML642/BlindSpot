@@ -11,12 +11,15 @@ Install and authenticate the Google Cloud CLI. The deploying account needs permi
 ```
 
 Set `-Region` or `-Model` when needed. The script checks the secret, builds from the repository root, deploys the worker and service, grants bucket access and permission to start that job with an audit-id override, then prints the URL. Only the audit ID is sent in an execution override. The worker loads the request from the bucket and its key from Secret Manager.
+Use `-GeminiSecret GEMINI_API_KEY` if your existing secret has that name instead of `blindspot-gemini`. The default model is `gemini-3.8-flash`. `.gcloudignore` excludes local credentials and audit data from uploaded build sources.
 
 The API is limited to one instance for the hackathon admission limiter (two active audits, ten POST requests per IP per minute). The worker has 2 vCPU/4 GiB; the API has 1 vCPU/2 GiB because the sample report renders a local browser. Keep maximum instances at one until admission/rate limits use a shared transactional store. There is no user authentication: report IDs act as bearer links.
 
 ## Verification
 
-Open `/api/health`, generate a sample report, then run a live audit on a public site you control. Confirm progress, screenshots, a final report, and cancellation. Inspect Cloud Run execution status and logs for startup or provider errors. No live GCP deployment was performed by the initial implementation.
+Open `/api/health`, generate a sample report, then run a live audit on a public site you control. Confirm progress, screenshots, a final report, and cancellation. Inspect Cloud Run execution status and logs for startup or provider errors.
+
+Verified on 2026-09-15: Cloud Build container compilation, public Cloud Run UI/API, a separate Cloud Run Job completing a live Gemini 3.8 Flash one-profile audit of example.com, persisted report and downloadable PNG evidence, and sample-report generation. The build's first submission briefly returned permission denied after API enablement; retrying with unchanged credentials succeeded. Local regression tests cover cancellation; verify it separately after each cloud deployment.
 
 Artifacts remain private in Cloud Storage and are exposed through the API by report ID. Set a bucket lifecycle deletion policy (for example seven days) appropriate to your hackathon. Public POST access can consume Gemini/GCP quota; use a project budget alert and close public access when the event ends.
 

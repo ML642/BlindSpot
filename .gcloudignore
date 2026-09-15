@@ -1,6 +1,7 @@
+.gcloudignore
+.git
 node_modules
 **/node_modules
-.git
 .env
 .env.*
 .data
@@ -8,3 +9,4 @@ node_modules
 artifacts
 test-results
 playwright-report
+*.tsbuildinfo

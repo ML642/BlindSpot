@@ -5,6 +5,7 @@ import type { AuditEvent, PageState } from '@blindspot/shared';
 import type { ArtifactStore } from './storage.js';
 import { assertSafeUrl, UnsafeUrlError } from './security.js';
 import { startNetworkProxy } from './network-proxy.js';
+import { AccessBlockedError, detectAccessBlock } from './challenge.js';
 
 export interface BrowserLimits {
   maxActions: number;
@@ -23,6 +24,7 @@ export interface BrowserOptions extends BrowserLimits {
 }
 
 export interface PageSnapshot {
+  blockedReason?: string;
   state: PageState;
   dom: string;
   accessibility: string;
@@ -62,6 +64,7 @@ export class BrowserSession {
   readonly page: Page;
   readonly snapshots: PageSnapshot[] = [];
   private actions = 0;
+  private documentResponse?: { mitigated?: string; status: number };
   private readonly options: BrowserOptions;
   private readonly origin: string;
   private proxy?: { url: string; close: () => Promise<void> };
@@ -90,7 +93,11 @@ export class BrowserSession {
       locale: 'en-US',
     });
     const page = await context.newPage();
-    context.on('page', (popup) => { if (popup !== page) { options.emit({ type: 'warning', message: 'A popup was blocked during the audit.' }); void popup.close(); } });
+    page.setDefaultTimeout(10_000);
+    page.setDefaultNavigationTimeout(options.timeoutMs);
+    // axe creates a trusted, opener-less page to aggregate frame results.
+    // Only website-created popups belong to this event; context 'page' is broader.
+    page.on('popup', (popup) => { options.emit({ type: 'warning', message: 'A popup was blocked during the audit.' }); void popup.close().catch(() => undefined); });
     page.on('download', (download) => { options.emit({ type: 'warning', message: `A download was blocked: ${download.suggestedFilename()}` }); void download.cancel(); });
     await context.routeWebSocket('**/*', socket => socket.close());
     await context.route('**/*', async (route) => {
@@ -109,6 +116,11 @@ export class BrowserSession {
       if (frame === page.mainFrame()) options.emit({ type: 'navigation', message: frame.url() });
     });
     const session = new BrowserSession(browser, context, page, options, startOrigin, proxy);
+    page.on('response', response => {
+      if (response.request().isNavigationRequest() && response.frame() === page.mainFrame()) {
+        session.documentResponse = { status: response.status(), mitigated: response.headers()['cf-mitigated'] };
+      }
+    });
     try {
       await session.navigate(options.startUrl);
       return session;
@@ -206,6 +218,7 @@ export class BrowserSession {
     const title = await this.page.title().catch(() => '');
     const bodyText = (await this.page.locator('body').innerText({ timeout: 3_000 }).catch(() => '')).slice(0, 20_000);
     const dom = await this.page.locator('html').evaluate((node) => node.outerHTML.slice(0, 250_000)).catch(() => '');
+    const blockedReason = detectAccessBlock({ ...this.documentResponse, title, text: bodyText, html: dom });
     const accessibility = await this.page.locator('body').ariaSnapshot().catch(async () => bodyText.slice(0, 20_000));
     const controls = await this.page.locator('button, a, input, textarea, select, [role]').evaluateAll((nodes) => nodes.slice(0, 400).map((node) => ({
       tag: node.tagName.toLowerCase(), role: node.getAttribute('role') ?? undefined,
@@ -216,8 +229,8 @@ export class BrowserSession {
     }))).catch(() => [] as ControlSummary[]);
     let axeRaw: Awaited<ReturnType<AxeBuilder['analyze']>>;
     let axeError: string | undefined;
-    try { axeRaw = await new AxeBuilder({ page: this.page }).analyze(); }
-    catch { axeRaw = { violations: [], passes: [], incomplete: [], inapplicable: [] } as unknown as typeof axeRaw; axeError = 'axe could not inspect this state.'; this.options.emit({ type: 'warning', message: axeError }); }
+    try { if (blockedReason) throw new AccessBlockedError(blockedReason); axeRaw = await new AxeBuilder({ page: this.page }).analyze(); }
+    catch { axeRaw = { violations: [], passes: [], incomplete: [], inapplicable: [] } as unknown as typeof axeRaw; axeError = blockedReason ?? 'axe could not inspect this state.'; this.options.emit({ type: 'warning', message: axeError }); }
     const axe: AxeResult = {
       violations: axeRaw.violations.map((item) => ({ id: item.id, tags: item.tags, impact: item.impact, help: item.help, description: item.description, helpUrl: item.helpUrl, nodes: item.nodes.map((node) => ({ html: node.html, target: node.target.map(String), failureSummary: node.failureSummary })) })),
       passes: axeRaw.passes.length, incomplete: axeRaw.incomplete.length, inapplicable: axeRaw.inapplicable.length, error: axeError,
@@ -229,9 +242,13 @@ export class BrowserSession {
     const domArtifact = await this.options.store.put(this.options.auditId, `${prefix}.html`, dom, 'text/plain; charset=utf-8');
     const accessibilityArtifact = await this.options.store.put(this.options.auditId, `${prefix}.aria.txt`, accessibility, 'text/plain; charset=utf-8');
     const state: PageState = { id: randomUUID(), url, title, capturedAt: new Date().toISOString(), screenshotArtifactId: screenshotArtifact?.id, domArtifactId: domArtifact.id, accessibilityArtifactId: accessibilityArtifact.id, description };
-    const result = { state, dom, accessibility, bodyText, controls, axe };
+    const result = { state, dom, accessibility, bodyText, controls, axe, blockedReason };
     this.snapshots.push(result);
     this.options.emit({ type: 'tool', message: `Captured page state: ${description}`, pageStateId: state.id });
+    if (blockedReason) {
+      await this.options.onCapture?.(this.page, result);
+      throw new AccessBlockedError(blockedReason);
+    }
     if (this.options.onCapture) {
       let probe: BrowserContext | undefined;
       let probePage: Page | undefined;
