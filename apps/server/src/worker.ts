@@ -5,6 +5,7 @@ import { runLiveChecks, combinePlaybookResults, type LiveResult } from './playbo
 import { runGeminiAgent } from './gemini-agent.js';
 import { runSpecialists } from './specialists.js';
 import { isFixtureUrl } from './security.js';
+import { AccessBlockedError } from './challenge.js';
 
 export interface AuditJob { id: string; request: AuditRequest; geminiApiKey?: string; geminiModel: string; fixtureTarget?: string; limits: BrowserLimits; }
 export interface WorkerResult { status: AuditStatus; pageStates: PageState[]; report?: AuditReport; error?: string; }
@@ -29,6 +30,12 @@ export async function runAuditJob(job: AuditJob, dependencies: WorkerDependencie
       ...job.limits,
       onCapture: async (page, snapshot, probePage) => {
         captured.push(snapshot);
+        if (snapshot.blockedReason) {
+          limitations.push(snapshot.blockedReason);
+results.push({ findings: [], limitations: [snapshot.blockedReason], profiles: job.request.profileIds.map(profileId => ({ profileId, status: 'blocked', summary: snapshot.blockedReason!, checks: [{ id: 'site-access-blocked', title: 'Access to the requested page', status: 'blocked', method: 'tool', evidenceIds: [], notes: snapshot.blockedReason! }] })) });
+          await dependencies.checkpoint?.({ status: 'running', pageStates: captured.map(s => s.state), report: report(snapshot.blockedReason, 'blocked') });
+          return;
+        }
         try { results.push(await runLiveChecks(page, snapshot, job.request.profileIds, undefined, probePage)); }
         catch { limitations.push(`Deterministic checks could not complete for page state ${snapshot.state.id}.`); emit({ type: 'warning', message: 'Some checkers could not complete for this state.' }); }
         await dependencies.checkpoint?.({ status: 'running', pageStates: captured.map(s => s.state), report: report('Audit in progress. These are the checks collected so far.', 'partial') });
@@ -43,6 +50,10 @@ export async function runAuditJob(job: AuditJob, dependencies: WorkerDependencie
     const incomplete = specialists.profiles.some(p => p.checks.some(c => c.status === 'blocked'));
     return { status: outcome === 'completed' && !incomplete ? 'completed' : 'partial', pageStates: captured.map(s => s.state), report: report(navigation.summary, outcome) };
   } catch (error) {
+    if (error instanceof AccessBlockedError) {
+      emit({ type: 'warning', message: error.message });
+      return { status: 'partial', pageStates: captured.map(s => s.state), report: report(error.message, 'blocked'), error: error.message };
+    }
     const cancelled = signal.aborted || error instanceof AuditCancelledError;
     const message = cancelled ? 'Audit stopped; captured evidence is preserved.' : 'The browser audit stopped before completion. Captured evidence is preserved.';
     emit({ type: 'warning', message });
