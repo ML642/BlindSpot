@@ -10,6 +10,24 @@ import '../issue-workspace.css';
 const priority = { critical: 0, serious: 1, moderate: 2, minor: 3 };
 const labels: Record<FindingDisposition, string> = { confirmed: 'Confirmed by a tool', review: 'Check manually', suggestion: 'Good practice', unverified: 'Unverified observation' };
 
+type ReviewCheck = NonNullable<Audit['report']>['profiles'][number]['checks'][number];
+
+function countChecks(checks: readonly ReviewCheck[]) {
+  return {
+    pass: checks.filter(check => check.status === 'pass').length,
+    needsReview: checks.filter(check => check.status === 'needs_review').length,
+    omitted: checks.filter(check => check.status === 'not_applicable').length,
+    blocked: checks.filter(check => check.status === 'blocked').length,
+    fail: checks.filter(check => check.status === 'fail').length,
+  };
+}
+
+function CheckCounts({ checks, compact = false }: { checks: readonly ReviewCheck[]; compact?: boolean }) {
+  const counts = countChecks(checks);
+  const label = `${counts.pass} passed, ${counts.needsReview} need review, ${counts.omitted} omitted, ${counts.blocked} blocked, ${counts.fail} failed`;
+  return <span className={`check-counts ${compact ? 'check-counts-compact' : ''}`} aria-label={label}><span className="count-pass" aria-hidden="true"><span>{String.fromCodePoint(0x2713)}</span>{counts.pass} passed</span><span className="count-review" aria-hidden="true">{counts.needsReview} review</span><span className="count-omitted" aria-hidden="true">{counts.omitted} omitted</span><span className="count-blocked" aria-hidden="true">{counts.blocked} blocked</span><span className="count-fail" aria-hidden="true">{counts.fail} failed</span></span>;
+}
+
 function FindingDetail({ audit, finding }: { audit: Audit; finding: Finding }) {
   const location = findingLocation(audit, finding);
   const disposition = findingDisposition(finding);
@@ -39,12 +57,27 @@ function FindingDetail({ audit, finding }: { audit: Audit; finding: Finding }) {
 
 function Coverage({ audit }: { audit: Audit }) {
   const report = audit.report!;
-  return <details className="report-secondary"><summary>Scope, checks and limitations</summary>
-    <div className="report-secondary-body"><p>{report.summary}</p><p>{audit.pageStates.length} captured states · {report.profiles.length} profiles assessed. A profile without findings is not a guarantee of accessibility.</p>
+  const allChecks = [...new Map(report.profiles.flatMap(profile => profile.checks).map(check => [`${check.method}|${check.id}|${check.status}|${check.title}|${check.notes}`, check])).values()];
+  return <details className="report-secondary"><summary>Scope, checks and limitations <span>{allChecks.length} checks</span></summary>
+    <div className="report-secondary-body">
+      <p>{report.summary}</p><p>{audit.pageStates.length} captured states / {report.profiles.length} profiles assessed. A profile without findings is not a guarantee of accessibility.</p>
+      <div className="review-totals"><strong>Accessibility checks</strong><CheckCounts checks={allChecks} /></div>
+      <div className="coverage-grid">{report.profiles.map(profile => {
+        const profileName = profiles.find(item => item.id === profile.profileId)?.name ?? profile.profileId;
+        return <details className="coverage-profile" key={profile.profileId}>
+          <summary>
+            <span className={`coverage-state state-${profile.status.replace('_', '-')}`}>{profile.status === 'pass' ? <span aria-hidden="true">{String.fromCodePoint(0x2713)}</span> : <span />}{formatStatus(profile.status)}</span>
+            <strong>{profileName}</strong>
+            <CheckCounts checks={profile.checks} compact />
+          </summary>
+          <div className="coverage-checks">{profile.checks.map((check, index) => <div className="coverage-check" key={`${check.id}-${index}`}>
+            <span className={`check-indicator check-${check.status.replace('_', '-')}`} aria-label={formatStatus(check.status)}>{check.status === 'pass' ? String.fromCodePoint(0x2713) : check.status === 'fail' ? '!' : check.status === 'not_applicable' ? '-' : String.fromCodePoint(0x00b7)}</span>
+            <span><strong>{check.title}</strong><small>{check.notes || 'No additional notes.'}</small></span>
+            <span className="check-method">{check.status === 'blocked' ? 'Not checked' : check.status === 'needs_review' ? 'Manual verification needed' : formatStatus(check.status)} / {check.method}</span>
+          </div>)}</div>
+        </details>;
+      })}</div>
       <h3>Limitations</h3><ul>{[...new Set(report.limitations)].map(item => <li key={item}>{item}</li>)}</ul>
-      {report.profiles.map(profile => <details className="report-technical" key={profile.profileId}><summary>{profiles.find(p => p.id === profile.profileId)?.name ?? profile.profileId} — {profile.checks.length} checks</summary>
-        <p>{profile.summary}</p>{profile.checks.map(check => <div className="report-evidence" key={check.id}><strong>{check.title}</strong><p>{check.status === 'blocked' ? 'Not checked' : check.status === 'needs_review' ? 'Manual verification needed' : formatStatus(check.status)} · {check.method}</p><p>{check.notes}</p></div>)}
-      </details>)}
     </div>
   </details>;
 }
