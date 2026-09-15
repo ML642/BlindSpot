@@ -2,7 +2,7 @@ import type { Finding, ProfileId } from '@blindspot/shared';
 import type { FindingAggregationOptions } from './types.js';
 
 function normalize(value: string | undefined): string {
-  return (value ?? '').toLowerCase().replace(/\s+/g, ' ').trim().replace(/\[\d+\]/g, '[*]');
+  return (value ?? '').replace(/\s+/g, ' ').trim();
 }
 
 /** Merge repeated tool/specialist reports while retaining every affected impairment profile. */
@@ -30,7 +30,8 @@ export function aggregateFindings(findings: readonly Finding[], options: Finding
     }
     const reproduction = [...new Set([...current.reproduction, ...finding.reproduction])];
     const severity = severityRank(finding.severity) > severityRank(current.severity) ? finding.severity : current.severity;
-    grouped.set(key, { ...current, profileIds, evidence, reproduction, severity, status: current.status === 'fail' || finding.status === 'fail' ? 'fail' : 'needs_review' });
+    const preferred = finding.method === 'tool' && finding.status === 'fail' ? finding : current;
+    grouped.set(key, { ...preferred, profileIds, evidence, reproduction, severity, status: current.status === 'fail' || finding.status === 'fail' ? 'fail' : 'needs_review' });
   }
   return [...grouped.values()];
 }

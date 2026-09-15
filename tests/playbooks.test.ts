@@ -6,8 +6,8 @@ import { AxeBuilder } from '@axe-core/playwright';
 import { getPlaybooks, runAutomatedChecks, aggregateFindings } from '@blindspot/playbooks';
 import { profileIds } from '@blindspot/shared';
 
-test('all 18 profiles have an executable catalog and a documented playbook', async () => {
-  const catalog = getPlaybooks(); assert.equal(catalog.length, 18);
+test('all profiles have an executable catalog and a documented playbook', async () => {
+  const catalog = getPlaybooks(); assert.equal(catalog.length, profileIds.length);
   assert.deepEqual(new Set(catalog.map(p => p.id)), new Set(profileIds));
   for (const profile of catalog) {
     assert.ok(profile.checks.length > 0);
