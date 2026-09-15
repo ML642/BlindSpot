@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { profiles, findingCopy, findingDisposition, type Audit, type Finding, type FindingDisposition, type ProfileId } from '@blindspot/shared';
+import { profiles, findingCopy, findingDisposition, type Audit, type Finding, type FindingDisposition, type ProfileId, type InteractionMode } from '@blindspot/shared';
 import { artifactUrl } from '../lib/api';
 import { buildMarkdown, downloadFile, formatStatus, humanDate, findingLocation } from '../lib/format';
 import { FindingLocation } from './FindingLocation';
@@ -68,6 +68,14 @@ function FindingDetail({ audit, finding, reviewStatus, onReview }: { audit: Audi
       </details>
     </div>
   </article>;
+}
+
+const journeyLabels: Record<InteractionMode, string> = { 'screen-reader': 'Screen reader', keyboard: 'Keyboard only', pointer: 'Sighted pointer' };
+
+function Journeys({ audit }: { audit: Audit }) {
+  const journeys = audit.report?.journeys ?? [];
+  if (!journeys.length) return null;
+  return <section className="journeys-panel" aria-labelledby="journeys-title"><div className="journeys-panel-head"><div><h2 id="journeys-title">Journeys</h2></div><span>{journeys.length} perspective{journeys.length === 1 ? '' : 's'} walked the scenario</span></div><div className="journey-list">{journeys.map((journey) => <details className="journey" key={journey.mode}><summary><span className={`scenario-status scenario-${journey.outcome}`}><span /> {journey.outcome}</span><strong>{journeyLabels[journey.mode]}</strong><span className="journey-profiles">{journey.profileIds.map((id) => profiles.find((profile) => profile.id === id)?.name ?? id).join(', ')}</span><Icon name="chevron" size={14} /></summary><div className="journey-body"><p>{journey.summary}</p>{journey.steps.length > 0 && <ol className="journey-steps">{journey.steps.map((step) => <li className="journey-step" key={`${journey.mode}-${step.turn}`}><span>{step.turn}</span><span><strong>{step.action}{step.detail ? ` ${step.detail}` : ''}</strong><small>{step.observation}</small></span></li>)}</ol>}</div></details>)}</div></section>;
 }
 
 function Coverage({ audit }: { audit: Audit }) {

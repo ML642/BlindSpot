@@ -50,7 +50,7 @@ test('separate worker persists SPA states, events and a partial tool-only fixtur
     assert.equal(audit?.status, 'partial', JSON.stringify(audit));
     assert.ok(audit.pageStates.length >= 2);
     assert.equal(audit.pageStates[0].url, audit.pageStates[1].url);
-    assert.ok(audit.report?.profiles.every(p => p.checks.some(c => c.method === 'gemini' && c.status === 'blocked')));
+    assert.ok(audit.report?.profiles.every(p => p.checks.some(c => c.method === 'gemini' && c.status === 'blocked')), JSON.stringify({ error: audit.error, profiles: audit.report?.profiles, journeys: audit.report?.journeys }));
     assert.ok((await app.inject(`/api/audits/${id}/events`)).json().events.length > 1);
     // Cancellation is persisted even if it arrives before worker startup.
     const second = await app.inject({ method: 'POST', url: '/api/audits', payload: { url: target, scenario: 'Find and inspect the login form', profileIds: ['blindness'] } });

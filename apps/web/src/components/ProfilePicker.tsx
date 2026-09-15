@@ -19,7 +19,7 @@ export function ProfilePicker({ selected, onChange }: { selected: ProfileId[]; o
     <fieldset className="profile-fieldset">
       <legend className="sr-only">Accessibility profiles</legend>
       <div className="profile-heading">
-        <div><p className="field-label">User profiles</p><p className="field-help">Choose whose experience the audit should model.</p></div>
+        <div><p className="field-label">User profiles</p><p className="field-help">Choose whose experience the audit should model. Each profile fixes what the agent may perceive.</p></div>
         <button type="button" className="select-all" onClick={toggleAll} aria-pressed={allSelected}>{allSelected ? 'Clear all' : 'Select all'}</button>
       </div>
       <div className="profile-groups">

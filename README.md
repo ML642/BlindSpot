@@ -1,6 +1,6 @@
 # BlindSpot
 
-An agent-assisted accessibility audit for real user journeys. Enter a public URL, describe a scenario, and choose from 18 accessibility profiles. A Gemini navigation agent explores rendered pages in Chromium; specialist playbooks combine measured browser checks with evidence-based review.
+An agent-assisted accessibility audit for real user journeys. Enter a public URL, describe a scenario, and choose from seven accessibility profiles. Each profile fixes a **perspective**: how the navigation agent operates the page and which evidence its specialist may see. The blind profile only ever hears a screen reader; the low-vision profile sees simulated renderings, measured contrast and the code.
 
 ## Local development
 
@@ -27,17 +27,20 @@ npm run test:ui
 npm start
 ```
 
-`test:ui` checks the built app at desktop and mobile sizes, sample-report navigation, filters, export, and axe diagnostics. The sample runs real browser checks on a generated illustrative page, without Gemini.
+`test:ui` checks the built app at desktop and mobile sizes, sample-report navigation, filters, export, and axe diagnostics. The sample runs real browser checks on a generated illustrative page, without Gemini. `npm test` includes a screen-reader journey test that reads a login fixture through speech alone, opens its dialog, and verifies that credential entry and login submission stay blocked.
 
 Live Gemini 3.8 Flash has been verified with a complete local one-profile audit of example.com. Individual results still require review; this smoke test is not a guarantee of correctness on arbitrary sites. The dependency audit currently reports two moderate transitive alerts (`gaxios` / `uuid`); resolve these before exposing the service beyond a controlled hackathon demo.
 
 ## What an audit does
 
 1. Validates the URL and creates a bounded job.
-2. Starts a separate browser worker and captures the initial rendered page.
-3. Lets Gemini choose from a fixed set of browser tools to follow the requested journey.
-4. Collects screenshots, rendered DOM, accessibility snapshots, and diagnostic results for visited states, including same-URL dialogs and SPA changes.
-5. Runs selected profile playbooks, merges duplicate findings, and produces a report with inspectable evidence and remediation guidance.
+2. Groups the selected profiles into journeys by interaction mode and opens one Chromium context per journey:
+   - **Screen reader** (blindness): a virtual screen reader ([`@guidepup/virtual-screen-reader`](https://github.com/guidepup/virtual-screen-reader)) is injected into the page. The Gemini agent gets only what it speaks and navigates with reader commands: read next, jump to heading or landmark, elements list, activate, type, key press. No screenshot, HTML, selector or rule output ever reaches it.
+   - **Keyboard only** (motor): the agent sees a screenshot and the focused element and may only press keys.
+   - **Sighted pointer** (low vision, colour vision, hearing, cognition, motion): the agent sees a screenshot and a numbered list of visible controls described by their labels.
+3. Every captured state stores the full evidence: screenshot, DOM, accessibility tree, axe results, DOM signals, the screen-reader read-through, the keyboard focus trace, and per-profile renderings (blurred vision, reduced contrast, protanopia, deuteranopia, tritanopia, achromatopsia, 320px reflow, 200% text size).
+4. Deterministic checks run on each state for the journey's profiles, with `pass`, `fail`, `needs_review` or `not_applicable` results.
+5. One Gemini specialist per profile receives only the channels of its perspective plus the transcript of its journey, and returns review candidates that must cite supplied evidence. Findings are merged into a report with inspectable evidence, journey transcripts and remediation guidance.
 
 The MVP explores public interfaces. A login scenario ends at the form, including keyboard access and empty-field validation. It does not supply account credentials, complete authentication, bypass CAPTCHAs, make purchases, or perform account-changing actions.
 
@@ -45,11 +48,21 @@ The MVP explores public interfaces. A login scenario ends at the form, including
 
 Each check is `pass`, `fail`, `needs_review`, `not_applicable`, or `blocked`. Findings distinguish deterministic measurements (`tool`) from model judgement (`gemini`). A completed job means the audit process finished, not that the page conforms to WCAG.
 
-Automation cannot establish full accessibility. Caption presence does not establish caption accuracy; a DOM accessibility snapshot is not a screen-reader test; viewport reflow is not full browser zoom; motion detection is not certified flash-frequency analysis. The report retains these limitations and human-review tasks.
+Automation cannot establish full accessibility. Caption presence does not establish caption accuracy; the virtual screen reader follows the ARIA specification but is not NVDA, JAWS or VoiceOver; viewport reflow is not full browser zoom; vision-deficiency emulation is Chromium's approximation; motion detection is not certified flash-frequency analysis. The report retains these limitations and human-review tasks.
 
-Cloudflare challenge responses (`cf-mitigated: challenge`), recognizable Cloudflare verification interstitials, and main-page HTTP 403/429 stop the audit with a blocked scenario and preserved page evidence. These pages are not passed to accessibility checkers or Gemini specialists as if they were the requested site. Detection is conservative: simply embedding Turnstile or mentioning Cloudflare does not trigger a block. Existing time, action, page-state and model-turn limits remain the fallback for unrecognized stalls. BlindSpot does not solve challenges or impersonate verified bots; ask the site owner to authorize access or provide a staging environment. See [Cloudflare challenge detection](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/) and [verified bot authentication](https://developers.cloudflare.com/bots/reference/bot-verification/web-bot-auth/).
+## Profiles and perspectives
 
-Profiles cover vision, hearing, movement, cognition, learning, attention, memory, sensory sensitivities, photosensitivity, motion sensitivity, and temporary impairments. Playbooks live in `packages/playbooks` and map applicable checks to [WCAG 2.2](https://www.w3.org/TR/WCAG22/).
+| Profile | Journey | Specialist evidence |
+| --- | --- | --- |
+| Blindness | Screen reader | Speech log of each state and the screen-reader transcript. Nothing visual, no code. |
+| Low vision | Sighted pointer | Screenshots, blurred and reduced-contrast renderings, 320px and 200%-text renderings, measured contrast, DOM, axe. |
+| Color vision deficiency | Sighted pointer | Screenshots with protanopia, deuteranopia, tritanopia and achromatopsia renderings, measured contrast, DOM, axe. |
+| Deaf and hard of hearing | Sighted pointer | Screenshots, visible text, media inventory (tracks, autoplay, controls), DOM. |
+| Motor and dexterity | Keyboard only | Screenshots, Tab focus trace with focus-indicator measurements, target sizes, DOM, axe, keyboard transcript. |
+| Cognitive, learning and attention | Sighted pointer | Screenshots and visible text only, as a sighted person without code access. |
+| Motion and flashing sensitivity | Sighted pointer | Screenshots, running-animation inventory, reduced-motion measurements, DOM. |
+
+Earlier profiles that duplicated one of these perspectives (hard of hearing, paralysis, tremors, dyslexia, ADHD, memory, autism, photosensitivity, vestibular, temporary, situational) were folded into them; speech impairment was removed because public web pages rarely require speech input and the check produced no actionable evidence. Perspectives live in `packages/playbooks/src/perspectives.ts`; playbooks in `packages/playbooks/src/playbooks.ts` map checks to [WCAG 2.2](https://www.w3.org/TR/WCAG22/) and `npm run docs:playbooks` regenerates their documentation.
 
 ## Architecture
 

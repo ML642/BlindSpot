@@ -6,6 +6,7 @@ import { chromium } from 'playwright';
 import { AxeBuilder } from '@axe-core/playwright';
 import { createApp } from '../apps/server/src/app.js';
 import { loadConfig } from '../apps/server/src/config.js';
+import { profiles } from '@blindspot/shared';
 
 const dataDir = await fs.mkdtemp(path.join(os.tmpdir(), 'blindspot-ui-data-'));
 const app = await createApp({ ...loadConfig({}), dataDir });
@@ -17,7 +18,9 @@ try {
   const page = await context.newPage();
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(url);
-  await page.getByRole('heading', { name: 'See your website’s blind spots.' }).waitFor();
+  await page.locator('#home-title').waitFor();
+  assert.equal(await page.locator('#home-title').textContent(), 'See your website’s blind spots.');
+
   const homeAxe = await new AxeBuilder({ page }).analyze();
   const homeShot = path.join(os.tmpdir(), 'blindspot-home.png'); await page.screenshot({ path: homeShot, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

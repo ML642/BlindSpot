@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { friendlyToolError } from '../apps/server/src/gemini-agent.js';
+import { friendlyToolError } from '../apps/server/src/event-messages.js';
 
 test('browser tool errors are converted to concise user-facing activity', () => {
   const hidden = String.raw`locator.click: Timeout 3000ms exceeded.

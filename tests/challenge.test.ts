@@ -31,7 +31,7 @@ for (const header of [true, false]) test(`challenge stops entire worker and pres
     });
     assert.equal(result.status, 'partial');
     assert.equal(result.report?.scenarioOutcome, 'blocked');
-    assert.equal(result.pageStates.length, 1);
+    assert.ok(result.pageStates.length >= 1 && result.pageStates.length <= 2, 'At most one challenge capture per concurrently started journey');
     assert.ok(result.pageStates[0].screenshotArtifactId);
     assert.equal(result.report?.findings.length, 0, 'do not audit the challenge as the target site');
     assert.ok(result.report?.profiles.every(p => p.status === 'blocked'));
