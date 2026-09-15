@@ -3,6 +3,7 @@ import { profiles, findingCopy, findingDisposition, type Audit, type Finding, ty
 import { artifactUrl } from '../lib/api';
 import { buildMarkdown, downloadFile, formatStatus, humanDate, findingLocation } from '../lib/format';
 import { FindingLocation } from './FindingLocation';
+import { Icon } from './Icon';
 import { RunTrace } from './RunTrace';
 import { loadReviewMarks, reviewKey, reviewRank, updateReviewMark, type ReviewStatus } from '../lib/review-state';
 import '../report.css';
@@ -30,6 +31,21 @@ function CheckCounts({ checks, compact = false }: { checks: readonly ReviewCheck
   return <span className={`check-counts ${compact ? 'check-counts-compact' : ''}`} aria-label={label}><span className="count-pass" aria-hidden="true"><span>{String.fromCodePoint(0x2713)}</span>{counts.pass} passed</span><span className="count-review" aria-hidden="true">{counts.needsReview} review</span><span className="count-omitted" aria-hidden="true">{counts.omitted} omitted</span><span className="count-blocked" aria-hidden="true">{counts.blocked} blocked</span><span className="count-fail" aria-hidden="true">{counts.fail} failed</span></span>;
 }
 
+function FindingSource({ finding }: { finding: Finding }) {
+  const agents = finding.profileIds.map(id => {
+    const profile = profiles.find(item => item.id === id);
+    return { id, name: profile?.name ?? id, group: profile?.group ?? 'Accessibility' };
+  });
+  const isAxe = finding.evidence.some(evidence => evidence.type === 'axe');
+  const method = finding.method === 'gemini' ? 'Gemini' : isAxe ? 'axe-core' : 'BlindSpot browser checks';
+
+  return <div className="finding-source">
+    <span className="finding-source-label">Detected by agents</span>
+    <div className="finding-agent-list">{agents.map(agent => <span className="finding-agent" key={agent.id}><strong>{agent.name}</strong><small>{agent.group}</small></span>)}</div>
+    <p className="finding-source-method"><span>Detection method</span><strong>{method}</strong></p>
+  </div>;
+}
+
 function FindingDetail({ audit, finding, reviewStatus, onReview }: { audit: Audit; finding: Finding; reviewStatus: ReviewStatus; onReview: (status: ReviewStatus) => void }) {
   const location = findingLocation(audit, finding);
   const disposition = findingDisposition(finding);
@@ -38,6 +54,7 @@ function FindingDetail({ audit, finding, reviewStatus, onReview }: { audit: Audi
     <header className="selected-issue-header">
       <div><p className="issue-eyebrow">{location.page?.title || 'Captured page'}</p><h2 id="selected-issue-title">{copy.title}</h2></div>
       <span className={`report-label report-label-${disposition}`}>{labels[disposition]}{disposition === 'confirmed' ? ` · ${finding.severity}` : ''}</span>
+      <FindingSource finding={finding} />
       <div className="finding-review-actions" role="group" aria-label="Review status">
         {reviewStatus === 'open' && <button type="button" className="quiet-button" onClick={() => onReview('seen')}>Mark as seen</button>}
         {reviewStatus !== 'resolved' && <button type="button" className="quiet-button" onClick={() => onReview('resolved')}>Mark as resolved</button>}
@@ -88,6 +105,29 @@ function Coverage({ audit }: { audit: Audit }) {
   </details>;
 }
 
+function ProfileDropdown({ audit, value, onChange }: { audit: Audit; value: 'all' | ProfileId; onChange: (value: 'all' | ProfileId) => void }) {
+  const available = profiles.filter(profile => audit.request.profileIds.includes(profile.id));
+  const selectedName = value === 'all' ? 'All profiles' : available.find(profile => profile.id === value)?.name ?? 'All profiles';
+  const options: Array<{ id: 'all' | ProfileId; name: string }> = [{ id: 'all', name: 'All profiles' }, ...available];
+
+  const select = (next: 'all' | ProfileId, button: HTMLButtonElement) => {
+    onChange(next);
+    button.closest('details')?.removeAttribute('open');
+  };
+
+  return <div className="report-profile-filter">
+    <span className="profile-dropdown-label">Profile</span>
+    <details className="profile-dropdown">
+      <summary aria-label={`Profile: ${selectedName}`}><span>{selectedName}</span><Icon name="chevron" size={16} /></summary>
+      <div className="profile-dropdown-menu" role="listbox" aria-label="Profiles">
+        {options.map(option => <button type="button" role="option" aria-selected={value === option.id} key={option.id} onClick={event => select(option.id, event.currentTarget)}>
+          <span>{option.name}</span>{value === option.id && <Icon name="check" size={16} />}
+        </button>)}
+      </div>
+    </details>
+  </div>;
+}
+
 function AuditReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: () => void }) {
   const [profileFilter, setProfileFilter] = useState<'all' | ProfileId>('all');
   const [selectedId, setSelectedId] = useState<string>();
@@ -118,6 +158,14 @@ function AuditReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: () =
   const all = [...report.findings].sort((a, b) => priority[a.severity] - priority[b.severity]);
   const visible = all.filter(f => profileFilter === 'all' || f.profileIds.includes(profileFilter));
   const categoryNames: Record<FindingDisposition, string> = { confirmed: 'Confirmed', review: 'To verify', suggestion: 'Suggestions', unverified: 'Unverified' };
+  const categoryOrder: FindingDisposition[] = ['confirmed', 'review', 'suggestion', 'unverified'];
+  const chooseProfile = (value: 'all' | ProfileId) => {
+    setProfileFilter(value);
+    setSelectedId(undefined);
+    const matching = all.filter(finding => value === 'all' || finding.profileIds.includes(value));
+    const firstAvailable = categoryOrder.find(kind => matching.some(finding => findingDisposition(finding) === kind));
+    if (firstAvailable) setCategory(firstAvailable);
+  };
   const listed = visible.filter(f => findingDisposition(f) === category).sort((a, b) => reviewRank[review.marks[a.id] ?? 'open'] - reviewRank[review.marks[b.id] ?? 'open']);
   const selected = listed.find(f => f.id === selectedId) ?? listed[0];
   const selectFinding = (finding: Finding) => {
@@ -140,7 +188,7 @@ function AuditReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: () =
     <div className="issue-workspace">
       <section className="issue-sidebar" aria-label="Findings">
         <div className="issue-sidebar-tools">
-          <label className="report-profile-filter">Profile<select value={profileFilter} onChange={e => setProfileFilter(e.target.value as 'all' | ProfileId)}><option value="all">All profiles</option>{profiles.filter(p => audit.request.profileIds.includes(p.id)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
+          <ProfileDropdown audit={audit} value={profileFilter} onChange={chooseProfile} />
 
         </div>
         <p className="issue-list-caption">{categoryNames[category]} <span>{listed.length}</span></p>

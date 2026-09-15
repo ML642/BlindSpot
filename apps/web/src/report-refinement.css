@@ -71,3 +71,32 @@
   .report-calm .issue-detail-panel { padding: 20px 16px; }
   .report-calm .report-heading { gap: 12px; }
 }
+
+
+.finding-source { margin: 14px 0 0; }
+.finding-source-label { display: block; margin-bottom: 7px; color: #526478; font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.finding-agent-list { display: flex; flex-wrap: wrap; gap: 6px; }
+.finding-agent { display: inline-flex; align-items: baseline; gap: 6px; padding: 5px 8px; color: #253b50; border: 1px solid #c9d8e5; border-radius: 4px; background: #f7fafc; font-size: 12px; }
+.finding-agent strong { font-size: 12px; }
+.finding-agent small { color: #526478; font-family: var(--mono); font-size: 10px; text-transform: uppercase; }
+.finding-source-method { display: flex; gap: 7px; margin: 8px 0 0; color: #526478; font-size: 11px; }
+.finding-source-method span { font-family: var(--mono); text-transform: uppercase; }
+.finding-source-method strong { color: #253b50; }
+
+
+/* Styled profile dropdown */
+.report-profile-filter { position: relative; }
+.profile-dropdown-label { display: block; color: #253b50; font-size: 12px; }
+.profile-dropdown { position: relative; }
+.profile-dropdown summary { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 40px; padding: 8px 11px; color: #253b50; border: 1px solid #b8c5d1; border-radius: 6px; background: #fff; cursor: pointer; font-size: 13px; list-style: none; }
+.profile-dropdown summary::-webkit-details-marker { display: none; }
+.profile-dropdown summary svg { flex: 0 0 auto; color: #526478; transition: transform 140ms ease; }
+.profile-dropdown[open] summary { border-color: #1766bf; box-shadow: 0 0 0 3px rgba(23,102,191,.16); }
+.profile-dropdown[open] summary svg { transform: rotate(180deg); }
+.profile-dropdown summary:focus-visible { outline: 3px solid #1766bf; outline-offset: 2px; }
+.profile-dropdown-menu { position: absolute; z-index: 20; top: calc(100% + 6px); left: 0; right: 0; max-height: 280px; padding: 5px; overflow-y: auto; border: 1px solid #b8c5d1; border-radius: 6px; background: #fff; box-shadow: 0 12px 28px rgba(19,37,61,.16); }
+.profile-dropdown-menu button { display: flex; align-items: center; justify-content: space-between; gap: 10px; width: 100%; min-height: 36px; padding: 8px 10px; color: #253b50; border: 0; border-radius: 4px; background: transparent; cursor: pointer; font: inherit; font-size: 13px; text-align: left; }
+.profile-dropdown-menu button:hover { background: #edf4fa; }
+.profile-dropdown-menu button[aria-selected="true"] { color: #0f579c; background: #e3f0fb; font-weight: 700; }
+.profile-dropdown-menu button:focus-visible { outline: 2px solid #1766bf; outline-offset: -2px; }
+.profile-dropdown-menu button svg { flex: 0 0 auto; }
