@@ -25,7 +25,7 @@ for (const signal of ['SIGTERM', 'SIGINT'] as const) process.once(signal, () => 
 try {
   if (await store.isCancelled?.(id)) controller.abort();
   audit.status = 'running'; await save();
-  const result = await runAuditJob({ id, request: audit.request, geminiApiKey: config.geminiApiKey, geminiModel: config.geminiModel, fixtureTarget: config.executionMode === 'local' ? config.fixtureTarget : undefined,
+  const result = await runAuditJob({ id, request: audit.request, geminiApiKey: config.geminiApiKey, geminiModel: config.geminiModel, fixtureTarget: config.executionMode === 'local' ? config.fixtureTarget : undefined, maxSpecialists: config.maxSpecialists,
     limits: { maxActions: config.maxActions, maxPageStates: config.maxPageStates, timeoutMs: Math.min(30_000, config.maxAuditMinutes * 60_000) } }, {
     store, signal: controller.signal,
     emit(event) {

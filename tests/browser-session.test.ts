@@ -29,11 +29,18 @@ test('browser captures a same-URL sign-in dialog with real DOM, ARIA and screens
   };
   let session: BrowserSession | undefined;
   try {
-    session = await BrowserSession.open({ startUrl: target, fixtureTarget: target, auditId: randomUUID(), store, signal: new AbortController().signal, emit() {}, maxActions: 30, maxPageStates: 5, timeoutMs: 10_000 });
+    session = await BrowserSession.open({ mode: 'pointer', renderings: ['deuteranopia', 'narrow-viewport'], startUrl: target, fixtureTarget: target, auditId: randomUUID(), store, signal: new AbortController().signal, emit() {}, maxActions: 30, maxPageStates: 5, timeoutMs: 10_000, async onCapture() {} });
     const before = session.snapshots[0];
     assert.equal(before.axe.error, undefined, 'axe helper page must not be blocked as a popup');
     assert.ok(before.axe.passes > 0, 'axe must actually run');
+    assert.equal(before.state.journey, 'pointer');
+    assert.ok(before.state.simulations?.some(item => item.kind === 'deuteranopia'), 'vision-deficiency rendering is captured');
+    assert.ok(before.state.simulations?.some(item => item.kind === 'narrow-viewport'), 'narrow reflow rendering is captured on the replayed probe');
+    const targets = await session.visibleTargets();
+    assert.ok(targets.items.some(item => item.label === 'Sign in'), 'targets are described by visible label');
+    assert.ok(targets.items.every(item => !('selector' in item)), 'targets never expose selectors');
     const after = await session.click({ selector: '#open' });
+    assert.ok(after, 'opening a dialog records a new page state automatically');
     assert.equal(before.state.url, after.state.url);
     assert.notEqual(before.state.id, after.state.id);
     assert.match(after.accessibility, /dialog.*Sign in/i);

@@ -28,8 +28,16 @@ export function buildMarkdown(audit: Audit) {
     `- Audited: ${humanDate(audit.updatedAt)}`,
     '', '## Summary', '', report.summary, '',
     `Scenario outcome: **${report.scenarioOutcome}**`, '',
-    '## Findings', '',
   ];
+  if (report.journeys?.length) {
+    lines.push('## Journeys', '');
+    for (const journey of report.journeys) {
+      lines.push(`### ${journey.mode} (${journey.outcome})`, '', journey.summary, '');
+      journey.steps.forEach((step) => lines.push(`${step.turn}. \`${step.action}${step.detail ? ` ${step.detail}` : ''}\` — ${step.observation}`));
+      lines.push('');
+    }
+  }
+  lines.push('## Findings', '');
   if (!report.findings.length) lines.push('No findings were returned for the selected profiles.');
   report.findings.forEach((finding) => {
     lines.push(`### ${finding.title}`, '', `**${finding.severity} · ${finding.status}**`, '', finding.description, '', `Impact: ${finding.impact}`, '', `Profiles: ${finding.profileIds.join(', ')}`, '', 'Reproduction:', ...finding.reproduction.map((step, index) => `${index + 1}. ${step}`), '', 'Evidence:', ...finding.evidence.map((evidence) => `- ${evidence.type}: ${evidence.description}${evidence.selector ? ` (${evidence.selector})` : ''}${evidence.value ? ` — ${evidence.value}` : ''}`), '', `Recommendation: ${finding.recommendation}`, '', `WCAG: ${finding.wcag.map((criterion) => `${criterion.id} ${criterion.title}`).join('; ')}`, '');

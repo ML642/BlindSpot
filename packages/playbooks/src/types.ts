@@ -1,4 +1,4 @@
-import type { Finding, PageState, PlaybookResult, ProfileId, Evidence } from '@blindspot/shared';
+import type { Finding, PageState, PlaybookResult, ProfileId, Evidence, InteractionMode } from '@blindspot/shared';
 
 /** The small portion of Playwright's Page used by the checker package.
  * Keeping this structural means the browser package can own its Playwright dependency.
@@ -52,8 +52,48 @@ export interface CheckerContext {
   axeResults?: AxeResultsLike;
   /** Or inject a lazy runner; this keeps axe optional for local/demo use. */
   runAxe?: () => Promise<AxeResultsLike>;
+  /** Precomputed DOM signals; collected from the page when absent. */
+  signals?: DomSignals;
+  /** Receives the raw interaction probe report so the caller can store the focus trace. */
+  onProbes?: (report: InteractionProbeReport) => void | Promise<void>;
   /** Capture is optional; diagnostics remain useful without artifact storage. */
   addEvidence?: (evidence: Omit<Evidence, 'id'> & { id?: string }) => Evidence;
+}
+
+/** What a specialist is allowed to see. Each channel maps to concrete evidence in the worker. */
+export type EvidenceChannel =
+  | 'speech'
+  | 'journey-transcript'
+  | 'focus-trace'
+  | 'screenshot'
+  | 'simulation'
+  | 'visible-text'
+  | 'dom'
+  | 'accessibility-tree'
+  | 'axe'
+  | 'measurements'
+  | 'media-inventory'
+  | 'motion-inventory';
+
+/** Alternative renderings captured for a page state. Vision deficiencies use Chromium's emulation. */
+export type Rendering =
+  | 'blurredVision'
+  | 'reducedContrast'
+  | 'protanopia'
+  | 'deuteranopia'
+  | 'tritanopia'
+  | 'achromatopsia'
+  | 'narrow-viewport'
+  | 'large-text';
+
+export interface Perspective {
+  interaction: InteractionMode;
+  channels: EvidenceChannel[];
+  renderings: Rendering[];
+  /** Second-person description of what the specialist and navigation agent perceive. */
+  persona: string;
+  /** Explicit statement of what must not be inferred. */
+  forbidden: string;
 }
 
 export interface PlaybookCheckDefinition {
@@ -75,6 +115,7 @@ export interface PlaybookDefinition {
   name: string;
   group: string;
   description: string;
+  perspective: Perspective;
   prompt: string;
   checks: PlaybookCheckDefinition[];
   limitations: string[];
@@ -88,22 +129,66 @@ export interface AutomatedAuditResult {
   limitations: string[];
 }
 
+export interface MediaItem extends SignalNode {
+  kind: 'audio' | 'video';
+  src?: string;
+  controls: boolean;
+  autoplay: boolean;
+  muted: boolean;
+  loop: boolean;
+  tracks: Array<{ kind: string; label: string; language: string }>;
+}
+
+export interface MotionItem extends SignalNode {
+  type: string;
+  name?: string;
+  durationMs?: number;
+  iterations?: number | 'infinite';
+  playState?: string;
+}
+
 export interface DomSignals {
+  title: string;
+  lang?: string;
+  landmarks: string[];
+  headings: Array<{ level: number; text: string }>;
+  imageCount: number;
+  controlCount: number;
+  personalFieldCount: number;
+  videoCount: number;
+  audioCount: number;
   imagesWithoutAlt: SignalNode[];
   controlsWithoutLabel: SignalNode[];
   headingJumps: Array<{ from: number; to: number; selector: string; text: string }>;
   positiveTabindices: SignalNode[];
   smallTargets: Array<SignalNode & { width: number; height: number }>;
+  mediaInventory: MediaItem[];
   mediaWithoutCaptions: SignalNode[];
   autoplayMedia: SignalNode[];
-  animatedElements: SignalNode[];
+  transcriptLinks: number;
+  motionInventory: MotionItem[];
+  flashCandidates: MotionItem[];
   hasReducedMotionRule: boolean;
   likelyColorOnlyIndicators: SignalNode[];
   textSpacingRisks: SignalNode[];
+  draggables: SignalNode[];
+  autocompleteGaps: SignalNode[];
+  contextChangeRisks: SignalNode[];
+}
+
+export interface FocusStop {
+  index: number;
+  tag: string;
+  role?: string;
+  name: string;
+  selector: string;
+  inViewport: boolean;
+  /** Whether outline, box-shadow, border or background changed between focused and blurred state. */
+  indicatorChanged?: boolean;
 }
 
 export interface InteractionProbeReport {
-  keyboard: { attempted: boolean; focusSequence: string[]; repeatedFocus: boolean; focusableCount: number };
+  keyboard: { attempted: boolean; focusSequence: string[]; trace: FocusStop[]; repeatedFocus: boolean; focusableCount: number; withoutIndicator: FocusStop[] };
   reflow: { attempted: boolean; viewport?: { width: number; height: number }; horizontalOverflow?: number };
   textResize: { attempted: boolean; overflowCount?: number };
   textSpacing: { attempted: boolean; overflowCount?: number };

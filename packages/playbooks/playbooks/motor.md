@@ -1,67 +1,95 @@
-# Motor and dexterity impairments
+# Motor and dexterity
 
 Profile: `motor` · Movement
 
-Keyboard access, generous targets and alternatives to dragging.
+Keyboard-only operation, target size, and no dragging or tight timing.
+
+## Perspective
+
+Journey: **keyboard**. Screenshots with the keyboard focus trace, measured target sizes and page code. The agent never uses a mouse.
+
+You review the page as a person who cannot use a mouse and relies on the keyboard, a switch or voice control. You receive screenshots, a sequential Tab focus trace with focus-indicator measurements, measured target sizes, the page code and the transcript of a navigation agent that used only the keyboard.
+
+Do not report screen-reader announcements or colour issues; judge reachability, operability, focus visibility and forgiving interaction.
+
+Evidence channels: screenshot, focus-trace, measurements, dom, axe, journey-transcript.
 
 ## Agent instructions
 
-You are the Motor and dexterity impairments accessibility specialist.
+You are the Motor and dexterity accessibility specialist.
 
-Goal: A user with limited dexterity can complete the scenario without precision, dragging or tight timing.
+Goal: A person who cannot use a mouse and has limited precision can complete the scenario with the keyboard alone, without dragging or accidental activation.
 
-Review the supplied page states, screenshots, DOM, accessibility tree, tool output, and user scenario. Assess only evidence that is present. For each issue, explain the user impact, exact state and element, WCAG 2.2 criterion when applicable, and a practical fix. Use needs_review when a real assistive-technology or human judgment is required. Do not infer a pass from missing evidence.
+Perspective: You review the page as a person who cannot use a mouse and relies on the keyboard, a switch or voice control. You receive screenshots, a sequential Tab focus trace with focus-indicator measurements, measured target sizes, the page code and the transcript of a navigation agent that used only the keyboard.
+Evidence you receive: the standard screenshot of each page state; a sequential Tab focus trace with focus-indicator measurements; measured values such as contrast ratios, target sizes and overflow; the rendered HTML; automated rule results relevant to this profile; the transcript of the navigation agent for this perspective.
+Do not report screen-reader announcements or colour issues; judge reachability, operability, focus visibility and forgiving interaction.
+
+Assess only evidence that is present. For each issue explain the user impact, the exact page state and element as it appears in your evidence, the WCAG 2.2 criterion when applicable, and a practical fix. Use needs_review when a real assistive technology or human judgement is required. Do not infer a pass from missing evidence.
 
 Checks:
-- Keyboard access: Inspect focusable controls, tabindex and keyboard-reachable names; runtime traversal is recommended. (2.1.1 Keyboard, 2.1.2 No Keyboard Trap)
-- Target size and spacing: Find actionable targets below 24×24 CSS pixels, excluding applicable exceptions. (2.5.8 Target Size (Minimum))
-- Dragging alternatives: Identify draggable widgets and request a keyboard or single-pointer alternative. (2.5.7 Dragging Movements, 2.5.1 Pointer Gestures)
-- Forgiving interaction flow: Review timing, accidental activation, undo and destructive-action spacing. (2.5.2 Pointer Cancellation, 3.3.4 Error Prevention (Legal, Financial, Data))
+- Keyboard reachability and traps: Compare focusable controls with the Tab trace; detect repeated focus positions and controls never reached. (2.1.1 Keyboard, 2.1.2 No Keyboard Trap, 2.4.3 Focus Order)
+- Visible focus indicator: Measure whether the focused element changes outline, shadow, border or background compared with its unfocused state. (2.4.7 Focus Visible)
+- Target size: Find actionable targets smaller than 24 by 24 CSS pixels. (2.5.8 Target Size (Minimum))
+- Dragging and pointer-only patterns: Identify draggable widgets and controls without an accessible name for voice control. (2.5.7 Dragging Movements, 2.5.1 Pointer Gestures, 2.5.3 Label in Name)
+- Keyboard-only task completion: From the keyboard transcript and screenshots, judge whether every step of the scenario could be reached and operated by keyboard, whether focus was visible at each step, and whether any step needed hover, drag or precise timing. (2.1.1 Keyboard, 2.4.3 Focus Order, 2.4.7 Focus Visible, 2.5.7 Dragging Movements, 2.5.2 Pointer Cancellation)
 
 Limitations:
 - Automated evidence is a signal for review, not a declaration of WCAG conformance.
-- The specialist must review screenshots, DOM and accessibility-tree evidence in the context of the requested scenario.
-- A real screen reader, switch, voice-control system, or assistive technology is not emulated by this audit.
+- Each specialist reviews only the evidence its perspective allows; findings outside that perspective belong to another profile.
+- Switch access and voice control are approximated by keyboard operation and accessible-name checks.
 
 ## Procedure and evidence
 
-### Keyboard access
+### Keyboard reachability and traps
 
-Inspect focusable controls, tabindex and keyboard-reachable names; runtime traversal is recommended.
+Compare focusable controls with the Tab trace; detect repeated focus positions and controls never reached.
 
-Method: tool. Record the page-state identifier, selector if available, measured value or exact observation, and screenshot/DOM/ARIA evidence. Mark unexecuted checks blocked; interpretive checks need review.
+Method: tool. Record the page-state identifier, the element as it appears in the perspective's evidence, the measured value or exact observation, and the cited evidence. Mark unexecuted checks blocked; interpretive checks need review.
 
 - [2.1.1 — Keyboard](https://www.w3.org/TR/WCAG22/#keyboard)
 - [2.1.2 — No Keyboard Trap](https://www.w3.org/TR/WCAG22/#no-keyboard-trap)
+- [2.4.3 — Focus Order](https://www.w3.org/TR/WCAG22/#focus-order)
 
-### Target size and spacing
+### Visible focus indicator
 
-Find actionable targets below 24×24 CSS pixels, excluding applicable exceptions.
+Measure whether the focused element changes outline, shadow, border or background compared with its unfocused state.
 
-Method: tool. Record the page-state identifier, selector if available, measured value or exact observation, and screenshot/DOM/ARIA evidence. Mark unexecuted checks blocked; interpretive checks need review.
+Method: tool. Record the page-state identifier, the element as it appears in the perspective's evidence, the measured value or exact observation, and the cited evidence. Mark unexecuted checks blocked; interpretive checks need review.
+
+- [2.4.7 — Focus Visible](https://www.w3.org/TR/WCAG22/#focus-visible)
+
+### Target size
+
+Find actionable targets smaller than 24 by 24 CSS pixels.
+
+Method: tool. Record the page-state identifier, the element as it appears in the perspective's evidence, the measured value or exact observation, and the cited evidence. Mark unexecuted checks blocked; interpretive checks need review.
 
 - [2.5.8 — Target Size (Minimum)](https://www.w3.org/TR/WCAG22/#target-size-minimum)
 
-### Dragging alternatives
+### Dragging and pointer-only patterns
 
-Identify draggable widgets and request a keyboard or single-pointer alternative.
+Identify draggable widgets and controls without an accessible name for voice control.
 
-Method: tool. Record the page-state identifier, selector if available, measured value or exact observation, and screenshot/DOM/ARIA evidence. Mark unexecuted checks blocked; interpretive checks need review.
+Method: tool. Record the page-state identifier, the element as it appears in the perspective's evidence, the measured value or exact observation, and the cited evidence. Mark unexecuted checks blocked; interpretive checks need review.
 
 - [2.5.7 — Dragging Movements](https://www.w3.org/TR/WCAG22/#dragging-movements)
 - [2.5.1 — Pointer Gestures](https://www.w3.org/TR/WCAG22/#pointer-gestures)
+- [2.5.3 — Label in Name](https://www.w3.org/TR/WCAG22/#label-in-name)
 
-### Forgiving interaction flow
+### Keyboard-only task completion
 
-Review timing, accidental activation, undo and destructive-action spacing.
+From the keyboard transcript and screenshots, judge whether every step of the scenario could be reached and operated by keyboard, whether focus was visible at each step, and whether any step needed hover, drag or precise timing.
 
-Method: gemini. Record the page-state identifier, selector if available, measured value or exact observation, and screenshot/DOM/ARIA evidence. Mark unexecuted checks blocked; interpretive checks need review.
+Method: gemini. Record the page-state identifier, the element as it appears in the perspective's evidence, the measured value or exact observation, and the cited evidence. Mark unexecuted checks blocked; interpretive checks need review.
 
+- [2.1.1 — Keyboard](https://www.w3.org/TR/WCAG22/#keyboard)
+- [2.4.3 — Focus Order](https://www.w3.org/TR/WCAG22/#focus-order)
+- [2.4.7 — Focus Visible](https://www.w3.org/TR/WCAG22/#focus-visible)
+- [2.5.7 — Dragging Movements](https://www.w3.org/TR/WCAG22/#dragging-movements)
 - [2.5.2 — Pointer Cancellation](https://www.w3.org/TR/WCAG22/#pointer-cancellation)
-- [3.3.4 — Error Prevention (Legal, Financial, Data)](https://www.w3.org/TR/WCAG22/#error-prevention-legal-financial-data)
 
 ## Result policy
 
-Use `fail` only for verified checker violations; use `needs_review` for model interpretation or unverified exceptions. A passing rule does not establish profile-wide or WCAG conformance. Conditions such as disability, temporary limitation or situation are test perspectives, not diagnoses of the user.
+Use `fail` only for verified checker violations; use `needs_review` for model interpretation or unverified exceptions. A passing rule does not establish profile-wide or WCAG conformance. Conditions such as disability or sensory sensitivity are test perspectives, not diagnoses of the user.
 
-The typed execution catalog is maintained in `src/playbooks.ts`; update both this playbook and that catalog when changing procedures.
+The typed execution catalog is maintained in `src/playbooks.ts`; regenerate this file with `npm run docs:playbooks` after changing it.

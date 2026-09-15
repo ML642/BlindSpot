@@ -43,8 +43,9 @@ export async function createApp(config: ServerConfig = loadConfig()) {
     const { id, artifactId } = params.extend({ artifactId: z.string().uuid() }).parse(request.params);
     const artifact = await manager.getArtifact(id, artifactId); if (!artifact) return reply.code(404).send({ error: 'Evidence not found.' });
     reply.header('Cache-Control', 'private, no-store').header('Content-Security-Policy', "default-src 'none'; sandbox");
-    if (artifact.contentType !== 'image/png') reply.header('Content-Disposition', `attachment; filename="${artifactId}.txt"`);
-    return reply.type(artifact.contentType === 'image/png' ? 'image/png' : 'text/plain; charset=utf-8').send(artifact.content);
+    const image = ['image/png', 'image/jpeg'].includes(artifact.contentType);
+    if (!image) reply.header('Content-Disposition', `attachment; filename="${artifactId}.txt"`);
+    return reply.type(image ? artifact.contentType : 'text/plain; charset=utf-8').send(artifact.content);
   });
   if (existsSync(config.webDistDir)) {
     await app.register(fastifyStatic, { root: config.webDistDir, index: 'index.html' });
