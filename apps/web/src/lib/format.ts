@@ -1,4 +1,4 @@
-import type { Audit, Finding } from '@blindspot/shared';
+import { findingCopy, findingDisposition, type Audit, type Finding } from '@blindspot/shared';
 import { artifactUrl } from './api';
 
 export function findingLocation(audit: Audit, finding: Finding, baseUrl?: string) {
@@ -11,7 +11,7 @@ export function findingLocation(audit: Audit, finding: Finding, baseUrl?: string
 }
 
 export function formatStatus(status: string) {
-  return status === 'needs_review' ? 'Needs review' : status.charAt(0).toUpperCase() + status.slice(1);
+  return status === 'needs_review' ? 'Needs review' : (status.charAt(0).toUpperCase() + status.slice(1)).replaceAll('_', ' ');
 }
 
 export function statusClass(status: string) {
@@ -42,7 +42,9 @@ export function buildMarkdown(audit: Audit, baseUrl?: string) {
   ];
   if (!report.findings.length) lines.push('No findings were returned for the selected profiles.');
   report.findings.forEach((finding) => {
-    lines.push(`### ${finding.title}`, '');
+    const copy = findingCopy(finding);
+    lines.push(`### ${copy.title}`, '', `Next step: ${copy.recommendation}`, '', `Why it matters: ${copy.impact}`, '');
+    lines.push(`Classification: ${findingDisposition(finding)} (certainty is separate from impact).`, '');
     const location = findingLocation(audit, finding, baseUrl);
     const markdownUrl = (url: string) => url.replace(/</g, '%3C').replace(/>/g, '%3E').replace(/[\r\n]/g, '');
     lines.push('#### Issue location', '', location.pageUrl ? `[Affected page](<${markdownUrl(location.pageUrl)}>)` : 'Page URL unavailable.', '', location.screenshotUrl ? `[Screenshot of captured page state](<${markdownUrl(location.screenshotUrl)}>)` : 'Screenshot unavailable.', '', ...(finding.selector ? [`Element: ${finding.selector}`, ''] : []));

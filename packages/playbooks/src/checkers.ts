@@ -27,7 +27,7 @@ function signalEvidence(context: CheckerContext, type: Evidence['type'], descrip
 
 function finding(
   context: CheckerContext,
-  input: Pick<Finding, 'title' | 'description' | 'impact' | 'severity' | 'recommendation' | 'wcag' | 'profileIds'> & Partial<Pick<Finding, 'selector' | 'reproduction' | 'method' | 'status'>>,
+  input: Pick<Finding, 'title' | 'description' | 'impact' | 'severity' | 'recommendation' | 'wcag' | 'profileIds'> & Partial<Pick<Finding, 'selector' | 'reproduction' | 'method' | 'status' | 'disposition'>>,
   evidence: Evidence[],
 ): Finding {
   const selector = input.selector ?? evidence.find(e => e.selector)?.selector;
@@ -46,6 +46,7 @@ function finding(
     wcag: input.wcag,
     method: input.method ?? 'tool',
     status: input.status ?? 'fail',
+    disposition: input.disposition,
   };
 }
 
@@ -328,6 +329,7 @@ function addAxeFindings(context: CheckerContext, results: AxeResultsLike | undef
       recommendation: `Resolve the ${rule.id} issue using the axe guidance and verify the recorded scenario again.`,
       wcag: axeWcag(rule.id, rule.tags),
       status: rule.tags?.includes('best-practice') || rule.id === 'heading-order' || rule.id === 'tabindex' ? 'needs_review' : 'fail',
+      disposition: rule.tags?.includes('best-practice') || rule.id === 'heading-order' || rule.id === 'tabindex' ? 'suggestion' : undefined,
       selector: nodeEvidence[0]?.selector,
       reproduction: ['Run the recorded scenario and inspect every element identified by the automated rule.'],
     }, nodeEvidence));

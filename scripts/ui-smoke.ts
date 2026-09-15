@@ -18,12 +18,6 @@ try {
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(url);
   await page.getByRole('heading', { name: 'See your website’s blind spots.' }).waitFor();
-  await page.locator('summary').filter({ hasText: 'Audit options' }).click();
-  await page.getByRole('button', { name: 'Clear all', exact: true }).click();
-  assert.equal(await page.getByRole('checkbox', { checked: true }).count(), 0);
-  await page.getByRole('button', { name: 'Select all', exact: true }).click();
-  assert.equal(await page.getByRole('checkbox', { checked: true }).count(), 18);
-  await page.locator('summary').filter({ hasText: 'Audit options' }).click();
   const homeAxe = await new AxeBuilder({ page }).analyze();
   const homeShot = path.join(os.tmpdir(), 'blindspot-home.png'); await page.screenshot({ path: homeShot, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
@@ -34,6 +28,8 @@ try {
   assert.match(page.url(), /audit=/);
   await page.reload();
   await page.getByRole('heading', { name: 'Accessibility report' }).waitFor();
+  assert.equal(await page.locator('.report-secondary[open]').count(), 0);
+  await page.locator('.report-primary .report-item > summary').first().click();
   const location = page.getByRole('region', { name: 'Issue location' });
   assert.equal(await location.locator('.finding-page-link').getAttribute('href'), 'https://sample.blindspot.example/sign-in');
   const screenshot = location.getByRole('img');
@@ -44,8 +40,8 @@ try {
   assert.deepEqual(overflowing, [], 'Mobile report overflow');
   const reportMobile = path.join(os.tmpdir(), 'blindspot-report-mobile.png'); await page.screenshot({ path: reportMobile, fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByRole('button', { name: /Filters/ }).click();
-  await page.getByRole('combobox', { name: /Severity/ }).selectOption('serious');
+  await page.getByRole('combobox', { name: 'Profile', exact: true }).selectOption('blindness');
+  assert.equal(await page.getByRole('combobox', { name: 'Profile', exact: true }).inputValue(), 'blindness');
   const reportAxe = await new AxeBuilder({ page }).analyze();
   const reportShot = path.join(os.tmpdir(), 'blindspot-report.png'); await page.screenshot({ path: reportShot, fullPage: true });
   await location.screenshot({ path: path.join(os.tmpdir(), 'blindspot-finding-location.png') });
