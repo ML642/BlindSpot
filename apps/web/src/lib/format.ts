@@ -34,21 +34,21 @@ export function buildMarkdown(audit: Audit, baseUrl?: string) {
     `- URL: ${audit.request.url}`,
     `- Scenario: ${audit.request.scenario}`,
     `- Status: ${formatStatus(audit.status)}`,
-    `- Run type: ${audit.demo ? 'Sample report (no Gemini call)' : 'Live agent audit'}`,
+    `- Run type: ${audit.demo ? 'Sample report, no Gemini call' : 'Live agent audit'}`,
     `- Audited: ${humanDate(audit.updatedAt)}`,
     '', '## Summary', '', report.summary, '',
-    `Scenario outcome: **${report.scenarioOutcome}**`, '',
+    `Scenario outcome: ${report.scenarioOutcome}`, '',
     '## Findings', '',
   ];
   if (!report.findings.length) lines.push('No findings were returned for the selected profiles.');
   report.findings.forEach((finding) => {
     const copy = findingCopy(finding);
     lines.push(`### ${copy.title}`, '', `Next step: ${copy.recommendation}`, '', `Why it matters: ${copy.impact}`, '');
-    lines.push(`Classification: ${findingDisposition(finding)} (certainty is separate from impact).`, '');
+    lines.push(`Classification: ${findingDisposition(finding)}. Certainty is separate from impact.`, '');
     const location = findingLocation(audit, finding, baseUrl);
     const markdownUrl = (url: string) => url.replace(/</g, '%3C').replace(/>/g, '%3E').replace(/[\r\n]/g, '');
     lines.push('#### Issue location', '', location.pageUrl ? `[Affected page](<${markdownUrl(location.pageUrl)}>)` : 'Page URL unavailable.', '', location.screenshotUrl ? `[Screenshot of captured page state](<${markdownUrl(location.screenshotUrl)}>)` : 'Screenshot unavailable.', '', ...(finding.selector ? [`Element: ${finding.selector}`, ''] : []));
-    lines.push(`**${finding.severity} · ${finding.status}**`, '', finding.description, '', `Impact: ${finding.impact}`, '', `Profiles: ${finding.profileIds.join(', ')}`, '', 'Reproduction:', ...finding.reproduction.map((step, index) => `${index + 1}. ${step}`), '', 'Evidence:', ...finding.evidence.map((evidence) => `- ${evidence.type}: ${evidence.description}${evidence.selector ? ` (${evidence.selector})` : ''}${evidence.value ? ` — ${evidence.value}` : ''}`), '', `Recommendation: ${finding.recommendation}`, '', `WCAG: ${finding.wcag.map((criterion) => `${criterion.id} ${criterion.title}`).join('; ')}`, '');
+    lines.push(`${finding.severity}, ${finding.status}`, '', finding.description, '', `Impact: ${finding.impact}`, '', `Profiles: ${finding.profileIds.join(', ')}`, '', 'Reproduction:', ...finding.reproduction.map((step, index) => `${index + 1}. ${step}`), '', 'Evidence:', ...finding.evidence.map((evidence) => `- ${evidence.type}: ${evidence.description}${evidence.selector ? `, ${evidence.selector}` : ''}${evidence.value ? `. ${evidence.value}` : ''}`), '', `Recommendation: ${finding.recommendation}`, '', `WCAG: ${finding.wcag.map((criterion) => `${criterion.id} ${criterion.title}`).join('; ')}`, '');
   });
   lines.push('## Limitations', '', ...report.limitations.map((limitation) => `- ${limitation}`));
   return lines.join('\n');

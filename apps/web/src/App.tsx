@@ -8,8 +8,8 @@ import { LogoMark } from './components/LogoMark';
 import { ReportView } from './components/ReportView';
 import { RunningView } from './components/RunningView';
 
-function Header({ onHome, onNavigate }: { onHome: () => void; onNavigate: (target: 'get-started' | 'info') => void }) {
-  return <header className="site-header"><button className="brand" onClick={onHome} aria-label="BlindSpot home"><LogoMark /><span>blindspot</span></button><nav className="site-nav" aria-label="Main navigation"><a href="#get-started" onClick={(event) => { event.preventDefault(); onNavigate('get-started'); }}>Get Started</a><a href="#info" onClick={(event) => { event.preventDefault(); onNavigate('info'); }}>Info</a></nav></header>;
+function Header({ onHome, onDemo, demoBusy }: { onHome: () => void; onDemo: () => void; demoBusy: boolean }) {
+  return <header className="site-header"><button className="brand" onClick={onHome} aria-label="BlindSpot home"><LogoMark /><span>blindspot</span></button><div className="header-actions"><button type="button" className="header-demo-button" onClick={onDemo} disabled={demoBusy}>{demoBusy ? <><span className="spinner" /> Loading sample...</> : <><Icon name="external" size={16} /> Explore a sample report</>}</button></div></header>;
 }
 
 export function App() {
@@ -17,6 +17,7 @@ export function App() {
   const [audit, setAudit] = useState<Audit | null>(null);
   const [events, setEvents] = useState<AuditEvent[]>([]);
   const [appError, setAppError] = useState('');
+  const [demoBusy, setDemoBusy] = useState(false);
   const eventCursor = useRef(0);
 
   useEffect(() => {
@@ -32,6 +33,19 @@ export function App() {
     window.history.pushState({ auditId }, '', `?audit=${encodeURIComponent(auditId)}`);
     getAudit(auditId).then(setAudit).catch((error) => { setAppError(error instanceof Error ? error.message : 'Could not load the audit.'); setScreen('form'); });
   }, []);
+
+  const startDemo = async () => {
+    setAppError('');
+    setDemoBusy(true);
+    try {
+      const result = await apiJson<{ id: string }>('/demo', { method: 'POST' });
+      startAudit(result.id);
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'The sample report could not be loaded.');
+    } finally {
+      setDemoBusy(false);
+    }
+  };
 
   useEffect(() => {
     const auditId = audit?.id;
@@ -65,12 +79,5 @@ export function App() {
   };
 
   const home = () => { window.history.replaceState({}, '', window.location.pathname); setScreen('form'); setAudit(null); setEvents([]); setAppError(''); };
-  const navigateHome = (target: 'get-started' | 'info') => {
-    home();
-    window.history.replaceState({}, '', `${window.location.pathname}#${target}`);
-    window.requestAnimationFrame(() => {
-      window.requestAnimationFrame(() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' }));
-    });
-  };
-  return <div className="app-shell"><a className="skip-link" href="#main-content">Skip to content</a><Header onHome={home} onNavigate={navigateHome} />{appError && <div className="global-alert" role="alert"><Icon name="x" size={16} />{appError}<button type="button" onClick={() => setAppError('')} aria-label="Dismiss message"><Icon name="x" size={15} /></button></div>}<div id="main-content" tabIndex={-1} />{screen === 'running' && !audit && <main className="running-main" aria-busy="true"><h1>Loading audit…</h1><p role="status">Retrieving the latest progress and evidence.</p></main>}{screen === 'form' && <HomeForm onStarted={startAudit} />}{screen === 'running' && audit && <RunningView audit={audit} events={events} onCancel={cancelAudit} />}{screen === 'report' && audit && <ReportView audit={audit} onNewAudit={home} />}<footer className="site-footer"><span>blindspot / 2026</span><span>Built for more ways to navigate</span></footer></div>;
+  return <div className="app-shell"><a className="skip-link" href="#main-content">Skip to content</a><Header onHome={home} onDemo={startDemo} demoBusy={demoBusy} />{appError && <div className="global-alert" role="alert"><Icon name="x" size={16} />{appError}<button type="button" onClick={() => setAppError('')} aria-label="Dismiss message"><Icon name="x" size={15} /></button></div>}<div id="main-content" tabIndex={-1} />{screen === 'running' && !audit && <main className="running-main" aria-busy="true"><h1>Loading audit…</h1><p role="status">Retrieving the latest progress and evidence.</p></main>}{screen === 'form' && <HomeForm onStarted={startAudit} />}{screen === 'running' && audit && <RunningView audit={audit} events={events} onCancel={cancelAudit} />}{screen === 'report' && audit && <ReportView audit={audit} onNewAudit={home} />}<footer className="site-footer"><span>blindspot / 2026</span><span>Built for more ways to navigate</span></footer></div>;
 }

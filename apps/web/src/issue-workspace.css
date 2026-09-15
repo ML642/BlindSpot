@@ -1,0 +1,54 @@
+.issue-workspace { display: grid; grid-template-columns: minmax(260px, 31%) minmax(0, 1fr); background: #fff; border: 1px solid #d7dee5; border-radius: 8px; margin-bottom: 24px; overflow: clip; }
+.issue-sidebar { background: #edf0f3; border-right: 1px solid #d7dee5; padding: 16px 10px; min-width: 0; }
+.issue-sidebar-tools { display: grid; gap: 12px; padding: 0 8px; }
+.issue-list-caption { margin: 20px 8px 10px; color: #56697c; font-size: 12px; }
+.issue-list-row { display: flex; gap: 10px; width: 100%; text-align: left; border: 1px solid transparent; border-radius: 5px; padding: 13px 10px; background: transparent; color: #13253d; cursor: pointer; font: inherit; margin-bottom: 4px; }
+.issue-list-row > span:last-child { min-width: 0; }
+.issue-list-row strong { font-size: 14px; line-height: 1.45; display: block; font-weight: 600; overflow-wrap: anywhere; }
+.issue-list-row small { display: block; color: #56697c; font-size: 12px; margin-top: 6px; overflow-wrap: anywhere; }
+.issue-list-row:hover { background: #e0e7ed; }
+.issue-list-row[aria-pressed=true] { background: #dce9f6; border-color: #9ebddb; }
+.issue-list-row:focus-visible { outline: 3px solid #1766bf; outline-offset: -3px; }
+.issue-dot { width: 8px; height: 8px; flex-shrink: 0; margin-top: 6px; border-radius: 50%; background: #667687; }
+.issue-dot-urgent { background: #b83c3c; }
+.issue-dot-confirmed { background: #345f8a; }
+.issue-dot-review { background: #a26b00; }
+.issue-detail-panel { padding: 28px; min-width: 0; }
+.issue-detail-panel:focus-visible { outline: 3px solid #1766bf; outline-offset: -3px; }
+.selected-issue-header { margin-bottom: 20px; }
+.selected-issue-header h2 { font-size: 24px; line-height: 1.3; margin: 6px 0 12px; letter-spacing: -.025em; overflow-wrap: anywhere; }
+.issue-eyebrow { font-size: 12px; color: #56697c; margin: 0; }
+.selected-issue-header .report-label { display: inline-block; background: #edf1f4; border-radius: 4px; padding: 4px 8px; }
+.selected-issue-header .report-label-review { background: #fff2d6; }
+.selected-issue .report-item-body { padding: 0; }
+.selected-issue .finding-context-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.selected-issue .finding-screenshot img { max-height: 260px; }
+.selected-issue .finding-fix { padding: 16px 18px; }
+.selected-issue .finding-guidance p { max-width: 65ch; font-size: 14px; }
+.selected-issue .finding-guidance h3 { font-size: 14px; }
+.issue-no-selection { padding-block: 40px; color: #56697c; }
+.trace-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+.trace-toolbar p { font-size: 13px; color: #56697c; }
+.trace-layout { display: grid; grid-template-columns: minmax(240px, 35%) minmax(0, 1fr); border: 1px solid #d7dee5; margin: 16px 0 24px; border-radius: 6px; overflow: clip; }
+.trace-timeline { background: #edf0f3; padding: 16px; min-width: 0; }
+.trace-timeline ol { list-style: none; padding: 0; max-height: 460px; overflow-y: auto; }
+.trace-timeline .issue-list-row strong { font-weight: 500; font-size: 13px; }
+.trace-inspector { padding: 24px; background: white; min-width: 0; overflow-wrap: anywhere; }
+.trace-inspector h3 { margin: 10px 0; font-size: 18px; }
+.trace-inspector p { font-size: 14px; }
+.trace-inspector figure { margin: 20px 0 0; }
+.trace-inspector img { width: 100%; max-height: 340px; object-fit: contain; background: #edf0f3; }
+.trace-inspector figcaption { font-size: 12px; color: #56697c; margin-top: 8px; }
+.trace-artifacts { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; }
+@media (max-width: 760px) {
+  .trace-layout { grid-template-columns: minmax(0, 1fr); }
+  .trace-toolbar { align-items: start; flex-direction: column; }
+  .trace-timeline ol { max-height: 240px; }
+  .issue-workspace { grid-template-columns: minmax(0, 1fr); }
+  .issue-sidebar { border-right: 0; border-bottom: 1px solid #d7dee5; }
+  .issue-sidebar-tools { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .issue-sidebar-tools .report-profile-filter { min-width: 0; }
+  .issue-list { max-height: 250px; overflow-y: auto; }
+  .issue-detail-panel { padding: 20px 16px; }
+  .selected-issue-header h2 { font-size: 21px; }
+}
