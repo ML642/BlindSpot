@@ -45,15 +45,16 @@ try {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.getByRole('combobox', { name: 'Profile', exact: true }).selectOption('blindness');
   assert.equal(await page.getByRole('combobox', { name: 'Profile', exact: true }).inputValue(), 'blindness');
+  await page.getByRole('combobox', { name: 'Profile', exact: true }).selectOption('all');
   const reportAxe = await new AxeBuilder({ page }).analyze();
   const reportShot = path.join(os.tmpdir(), 'blindspot-report.png'); await page.screenshot({ path: reportShot, fullPage: true });
   await location.screenshot({ path: path.join(os.tmpdir(), 'blindspot-finding-location.png') });
   const downloaded = page.waitForEvent('download'); await page.getByRole('button', { name: 'JSON', exact: true }).click();
   assert.match((await downloaded).suggestedFilename(), /\.json$/);
   // Exercise report category changes, including a genuinely empty selection.
-  await page.getByRole('combobox', { name: 'Results', exact: true }).selectOption('suggestion');
+  await page.getByRole('group', { name: 'Result categories' }).getByRole('button', { name: /Suggestions/ }).click();
   await page.getByRole('heading', { name: 'No finding to display' }).waitFor();
-  await page.getByRole('combobox', { name: 'Results', exact: true }).selectOption('confirmed');
+  await page.getByRole('group', { name: 'Result categories' }).getByRole('button', { name: /Confirmed/ }).click();
   const savedAudit = await (await page.request.get(`${url}/api/audits/${new URL(page.url()).searchParams.get('audit')}`)).json();
   let failTrace = true;
   await page.route('**/api/audits/*/events?after=0', route => route.fulfill({ status: failTrace ? 503 : 200, contentType: 'application/json', body: JSON.stringify(failTrace ? { error: 'Fixture unavailable' } : { events: [

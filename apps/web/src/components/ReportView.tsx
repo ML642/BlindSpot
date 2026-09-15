@@ -6,6 +6,7 @@ import { FindingLocation } from './FindingLocation';
 import { RunTrace } from './RunTrace';
 import '../report.css';
 import '../issue-workspace.css';
+import '../report-refinement.css';
 
 const priority = { critical: 0, serious: 1, moderate: 2, minor: 3 };
 const labels: Record<FindingDisposition, string> = { confirmed: 'Confirmed by a tool', review: 'Check manually', suggestion: 'Good practice', unverified: 'Unverified observation' };
@@ -35,7 +36,7 @@ function FindingDetail({ audit, finding }: { audit: Audit; finding: Finding }) {
   return <article className="selected-issue" aria-labelledby="selected-issue-title">
     <header className="selected-issue-header">
       <div><p className="issue-eyebrow">{location.page?.title || 'Captured page'}</p><h2 id="selected-issue-title">{copy.title}</h2></div>
-      <span className={`report-label report-label-${disposition}`}>{labels[disposition]}</span>
+      <span className={`report-label report-label-${disposition}`}>{labels[disposition]}{disposition === 'confirmed' ? ` · ${finding.severity}` : ''}</span>
     </header>
     <div className="report-item-body">
       <FindingLocation audit={audit} finding={finding}>
@@ -104,20 +105,23 @@ export function ReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: ()
     <header className="report-heading"><div><p className="report-context">{audit.demo ? 'Sample audit' : 'Website audit'} · {humanDate(audit.updatedAt)}</p><h1>Accessibility report</h1><p className="report-site">{audit.request.url}</p></div>
       <div className="report-actions"><button className="quiet-button" onClick={onNewAudit}>New audit</button><button className="quiet-button" onClick={() => downloadFile(`blindspot-${audit.id}.json`, JSON.stringify(audit, null, 2), 'application/json')}>JSON</button><button className="quiet-button" onClick={() => downloadFile(`blindspot-${audit.id}.md`, buildMarkdown(audit, window.location.origin), 'text/markdown')}>Markdown</button></div>
     </header>
-    <section className="report-overview" aria-label="Audit outcome"><h2>{confirmedTotal ? `${confirmedTotal} confirmed ${confirmedTotal === 1 ? 'barrier' : 'barriers'} to address` : 'No confirmed barriers in the captured states'}</h2><p>{report.scenarioOutcome === 'completed' ? 'The agent completed the scenario. This does not mean everyone can complete it.' : report.scenarioOutcome === 'blocked' ? 'The agent could not complete the scenario. Results cover only the states it could inspect.' : 'The scenario was only partly inspected. Some steps remain unchecked.'}</p><details><summary>Scenario and audit summary</summary><p>{audit.request.scenario}</p><p>{report.summary}</p></details></section>
+    <div className="report-command-bar">
+      <div className="result-switcher" role="group" aria-label="Result categories">{(Object.keys(categoryNames) as FindingDisposition[]).map(kind => <button key={kind} type="button" aria-pressed={category === kind} onClick={() => setCategory(kind)}><span className={`issue-dot issue-dot-${kind === 'confirmed' ? 'urgent' : kind}`} aria-hidden="true" />{categoryNames[kind]}<span className="category-count">{visible.filter(f => findingDisposition(f) === kind).length}</span></button>)}</div>
+      <span className="run-outcome">{report.scenarioOutcome === 'completed' ? 'Scenario completed' : report.scenarioOutcome === 'blocked' ? 'Scenario blocked' : 'Partial audit'}</span>
+    </div>
     <div className="issue-workspace">
       <section className="issue-sidebar" aria-label="Findings">
         <div className="issue-sidebar-tools">
           <label className="report-profile-filter">Profile<select value={profileFilter} onChange={e => setProfileFilter(e.target.value as 'all' | ProfileId)}><option value="all">All profiles</option>{profiles.filter(p => audit.request.profileIds.includes(p.id)).map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</select></label>
-          <label className="report-profile-filter">Results<select value={category} onChange={e => setCategory(e.target.value as FindingDisposition)}>{(Object.keys(categoryNames) as FindingDisposition[]).map(kind => <option key={kind} value={kind}>{categoryNames[kind]} · {visible.filter(f => findingDisposition(f) === kind).length}</option>)}</select></label>
+
         </div>
-        <p className="issue-list-caption">{listed.length} results · highest impact first</p>
+        <p className="issue-list-caption">{categoryNames[category]} <span>{listed.length}</span></p>
         <div className="issue-list">{listed.map(finding => {
           const kind = findingDisposition(finding);
           const tone = kind === 'confirmed' && ['critical', 'serious'].includes(finding.severity) ? 'urgent' : kind;
           return <button key={finding.id} type="button" className="issue-list-row" aria-pressed={selected?.id === finding.id} aria-controls="issue-detail" onClick={() => selectFinding(finding)}>
             <span className={`issue-dot issue-dot-${tone}`} aria-hidden="true" />
-            <span><strong>{findingCopy(finding).title}</strong><small>{labels[kind]}{kind === 'confirmed' ? ` · ${finding.severity}` : ''}</small><small>{finding.selector || audit.pageStates.find(p => p.id === finding.pageStateId)?.title || 'Captured page'}</small></span>
+            <span><strong>{findingCopy(finding).title}</strong><small>{finding.selector || audit.pageStates.find(p => p.id === finding.pageStateId)?.title || 'Captured page'}</small></span>
           </button>;
         })}</div>
         {!listed.length && <p className="report-empty">No results in this category for the selected profile.</p>}
@@ -126,6 +130,7 @@ export function ReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: ()
         {selected ? <FindingDetail key={selected.id} audit={audit} finding={selected} /> : <div className="issue-no-selection"><h2>No finding to display</h2><p>Choose another category or profile. An empty list does not mean the site is fully accessible.</p></div>}
       </section>
     </div>
+    <details className="report-secondary"><summary>About this audit <span>{confirmedTotal} confirmed barriers</span></summary><div className="report-secondary-body"><p>{audit.request.scenario}</p><p>{report.summary}</p><p>Scenario completion does not establish accessibility. Only captured states were inspected.</p></div></details>
     <Coverage audit={audit} />
     <RunTrace audit={audit} />
     <p className="report-footnote">Automated checks do not certify accessibility. Test important journeys with people who use assistive technology.</p>
