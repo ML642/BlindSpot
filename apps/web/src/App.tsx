@@ -4,11 +4,12 @@ import { apiJson, getAudit, getEvents } from './lib/api';
 import type { Audit, AuditEvent, Screen } from './lib/types';
 import { HomeForm } from './components/HomeForm';
 import { Icon } from './components/Icon';
+import { LogoMark } from './components/LogoMark';
 import { ReportView } from './components/ReportView';
 import { RunningView } from './components/RunningView';
 
 function Header({ onHome, onNavigate }: { onHome: () => void; onNavigate: (target: 'get-started' | 'info') => void }) {
-  return <header className="site-header"><button className="brand" onClick={onHome} aria-label="BlindSpot home"><span className="brand-mark"><span /></span><span>blindspot</span></button><nav className="site-nav" aria-label="Main navigation"><a href="#get-started" onClick={(event) => { event.preventDefault(); onNavigate('get-started'); }}>Get Started</a><a href="#info" onClick={(event) => { event.preventDefault(); onNavigate('info'); }}>Info</a></nav></header>;
+  return <header className="site-header"><button className="brand" onClick={onHome} aria-label="BlindSpot home"><LogoMark /><span>blindspot</span></button><nav className="site-nav" aria-label="Main navigation"><a href="#get-started" onClick={(event) => { event.preventDefault(); onNavigate('get-started'); }}>Get Started</a><a href="#info" onClick={(event) => { event.preventDefault(); onNavigate('info'); }}>Info</a></nav></header>;
 }
 
 export function App() {

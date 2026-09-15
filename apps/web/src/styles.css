@@ -154,7 +154,7 @@ textarea { min-height: 120px; padding: 13px 14px; resize: vertical; line-height:
 .form-panel form { grid-template-columns: minmax(280px, .8fr) minmax(0, 1.35fr); gap: 48px; }
 .field-block > label, .profile-fieldset .field-label { font-size: 14px; }
 textarea { font-size: 14px; min-height: 175px; }
-.profile-option:focus-within { outline: 3px solid var(--blue-dark); outline-offset: 2px; }
+.profile-option:focus-within { box-shadow: inset 0 0 0 3px var(--blue-dark); }
 .primary-button, .demo-button, .quiet-button { font-size: 14px; }
 .demo-button { width: auto; min-height: 44px; margin: 18px auto 0; padding-inline: 24px; background: white; }
 .demo-note { line-height: 1.5; }
@@ -273,3 +273,26 @@ textarea { font-size: 14px; min-height: 175px; }
   .profiles-step .profile-groups { columns: 1; }
   .simple-home .demo-divider { margin-top: 18px; }
 }
+
+
+/* Keep the live trace concise when audits produce many profile events. */
+.running-url { max-width: min(70vw, 680px); min-width: 0; }
+.running-url svg { flex: 0 0 auto; }
+.running-url span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.event-row { grid-template-columns: 24px minmax(0, 1fr); gap: 11px; padding-block: 13px; }
+.event-content { min-width: 0; }
+.event-row p { display: -webkit-box; margin-bottom: 5px; overflow: hidden; overflow-wrap: anywhere; font-size: 13px; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+.event-row time { font-size: 11px; }
+.capture-description { display: -webkit-box; overflow: hidden; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
+
+
+/* BlindSpot focus-gap identity */
+.brand { gap: 9px; }
+.logo-mark { flex: 0 0 auto; overflow: visible; }
+.logo-orbit { stroke: var(--blue); stroke-width: 2.5; stroke-linecap: round; }
+.logo-gap { stroke: var(--ink); stroke-width: 2.5; stroke-linecap: round; }
+.logo-focus { fill: var(--ink); }
+.logo-spark { fill: var(--blue); }
+.brand:hover .logo-orbit, .brand:focus-visible .logo-orbit { stroke: var(--blue-dark); }
+.brand:hover .logo-spark, .brand:focus-visible .logo-spark { transform: translateX(1px); }
+.logo-spark { transform-origin: center; transition: transform 160ms ease; }
