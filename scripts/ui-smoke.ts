@@ -50,7 +50,8 @@ try {
   await page.reload();
   await page.getByRole('heading', { name: 'Accessibility report' }).waitFor();
   await page.locator('.issue-list-row').filter({ hasText: originalTitle }).click();
-  await page.getByText('Marked resolved by you. Not retested.', { exact: true }).waitFor();
+  assert.equal(await page.locator('.issue-list-row[aria-pressed=true]').getAttribute('data-review'), 'resolved');
+  assert.equal(await page.locator('.review-scope').count(), 0);
   await page.getByRole('button', { name: 'Reopen', exact: true }).click();
   assert.equal(await page.locator('.issue-list-row').first().getAttribute('data-review'), 'open');
   await page.getByRole('button', { name: 'Mark as resolved', exact: true }).click();
@@ -71,6 +72,15 @@ try {
   const exported = JSON.parse(await fs.readFile((await reportDownload.path())!, 'utf8'));
   assert.ok(Object.values(exported.manualReview.marks).includes('resolved'));
   assert.ok(exported.report.findings.some((finding: { status: string }) => finding.status === 'fail'), 'Manual review must not rewrite audit failures');
+  const technical = page.locator('.selected-issue .report-technical');
+  await technical.getByText('Technical details', { exact: true }).click();
+  assert.equal(await technical.locator('p').count(), 0, 'Technical details should not repeat report prose');
+  assert.equal(await technical.getByRole('link', { name: 'Rendered HTML', exact: true }).count(), 1);
+  const rawDownload = page.waitForEvent('download');
+  await technical.getByRole('button', { name: 'Raw finding JSON' }).click();
+  const rawFinding = JSON.parse(await fs.readFile((await (await rawDownload).path())!, 'utf8'));
+  assert.ok(rawFinding.evidence.length > 0, 'Full evidence remains downloadable');
+  await page.locator('.selected-issue').screenshot({ path: path.join(os.tmpdir(), 'blindspot-review-details.png') });
   // Exercise report category changes, including a genuinely empty selection.
   await page.getByRole('group', { name: 'Result categories' }).getByRole('button', { name: /Suggestions/ }).click();
   await page.getByRole('heading', { name: 'No finding to display' }).waitFor();

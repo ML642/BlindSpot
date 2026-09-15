@@ -43,21 +43,19 @@ function FindingDetail({ audit, finding, reviewStatus, onReview }: { audit: Audi
         {reviewStatus !== 'resolved' && <button type="button" className="quiet-button" onClick={() => onReview('resolved')}>Mark as resolved</button>}
         {reviewStatus !== 'open' && <button type="button" className="quiet-button" onClick={() => onReview('open')}>Reopen</button>}
       </div>
-      <p className="review-scope">{reviewStatus === 'resolved' ? 'Marked resolved by you. Not retested.' : reviewStatus === 'seen' ? 'Marked seen by you. Still needs attention.' : 'Review marks are saved in this browser only.'}</p>
     </header>
     <div className="report-item-body">
       <FindingLocation audit={audit} finding={finding}>
         {finding.observation && <section className="finding-observation"><h3>What we observed</h3><p>{finding.observation}</p></section>}
         <section className="finding-fix"><h3>How to fix it</h3><p>{copy.recommendation}</p></section>
       </FindingLocation>
-      <details className="report-technical"><summary>Evidence and technical details</summary>
-        <p>{copy.impact}</p><p>Original finding: {finding.title}</p><p>{finding.description}</p><p>{finding.recommendation}</p>
-        <p>Reported impact: {finding.severity}. {labels[disposition]}. Impact does not indicate certainty.</p>
-        <p>Affected profiles: {finding.profileIds.map(id => profiles.find(p => p.id === id)?.name ?? id).join(', ')}.</p>
-        <h4>Evidence</h4>
-        {finding.evidence.map(evidence => <div key={evidence.id} className="report-evidence"><p>{evidence.description}</p>{evidence.selector && <code>{evidence.selector}</code>}{evidence.value && <p>{evidence.value}</p>}{evidence.artifactId && <a href={artifactUrl(audit.id, evidence.artifactId)} target="_blank" rel="noreferrer">Open {evidence.type} evidence</a>}</div>)}
-        <h4>Reproduce</h4><ol>{finding.reproduction.map((step, i) => <li key={i}>{step}</li>)}</ol>
-        <h4>Standards reference</h4>{finding.wcag.map(ref => <p key={ref.id}><a href={ref.url} target="_blank" rel="noreferrer">{ref.id} {ref.title}</a></p>)}
+      <details className="report-technical"><summary>Technical details</summary>
+        <div className="technical-links">
+          {finding.wcag.map(ref => <a href={ref.url} target="_blank" rel="noreferrer" key={ref.id}>{ref.id} {ref.title}</a>)}
+          {location.page?.domArtifactId && <a href={artifactUrl(audit.id, location.page.domArtifactId)} target="_blank" rel="noreferrer">Rendered HTML</a>}
+          {location.page?.accessibilityArtifactId && <a href={artifactUrl(audit.id, location.page.accessibilityArtifactId)} target="_blank" rel="noreferrer">Accessibility tree</a>}
+          <button type="button" className="quiet-button" onClick={() => downloadFile(`blindspot-finding-${finding.id}.json`, JSON.stringify(finding, null, 2), 'application/json')}>Raw finding JSON</button>
+        </div>
       </details>
     </div>
   </article>;
