@@ -1,0 +1,71 @@
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { terminalStatuses } from '@blindspot/shared';
+import type { Audit, AuditEvent } from '@blindspot/shared';
+import { apiJson, getAudit, getEvents, getHealth } from './lib/api';
+import type { Health, Screen } from './lib/types';
+import { HomeForm } from './components/HomeForm';
+import { Icon } from './components/Icon';
+import { ReportView } from './components/ReportView';
+import { RunningView } from './components/RunningView';
+
+function Header({ health, onHome }: { health: Health | null; onHome: () => void }) {
+  return <header className="site-header"><button className="brand" onClick={onHome} aria-label="BlindSpot home"><span className="brand-mark"><span /></span><span>blindspot</span></button><div className="header-meta"><span className="header-note">Accessibility intelligence for the web</span><span className={`connection ${health?.geminiConfigured ? 'is-ready' : 'is-demo'}`}><span className="connection-dot" aria-hidden="true" />{health?.geminiConfigured ? 'Gemini connected' : health ? 'Demo mode' : 'Checking service'}</span></div></header>;
+}
+
+export function App() {
+  const [screen, setScreen] = useState<Screen>('form');
+  const [health, setHealth] = useState<Health | null>(null);
+  const [audit, setAudit] = useState<Audit | null>(null);
+  const [events, setEvents] = useState<AuditEvent[]>([]);
+  const [appError, setAppError] = useState('');
+  const eventCursor = useRef(0);
+
+  useEffect(() => {
+    getHealth().then(setHealth).catch(() => setHealth({ geminiConfigured: false, mode: 'unavailable' }));
+    const savedId = new URLSearchParams(window.location.search).get('audit');
+    if (!savedId) return;
+    setScreen('running');
+    getAudit(savedId).then((savedAudit) => { setAudit(savedAudit); setScreen(terminalStatuses.includes(savedAudit.status) ? 'report' : 'running'); }).catch((error) => { setAppError(error instanceof Error ? error.message : 'Could not restore the audit.'); setScreen('form'); });
+  }, []);
+
+  const startAudit = useCallback((auditId: string) => {
+    eventCursor.current = 0;
+    setAudit(null); setEvents([]); setAppError(''); setScreen('running');
+    window.history.pushState({ auditId }, '', `?audit=${encodeURIComponent(auditId)}`);
+    getAudit(auditId).then(setAudit).catch((error) => setAppError(error instanceof Error ? error.message : 'Could not load the audit.'));
+  }, []);
+
+  useEffect(() => {
+    const auditId = audit?.id;
+    if (screen !== 'running' || !auditId) return;
+    let active = true;
+    const poll = async () => {
+      try {
+        const [nextAudit, eventPayload] = await Promise.all([getAudit(auditId), getEvents(auditId, eventCursor.current)]);
+        if (!active) return;
+        setAudit(nextAudit);
+        if (eventPayload.events.length) {
+          eventCursor.current = Math.max(eventCursor.current, ...eventPayload.events.map((event) => event.id));
+          setEvents((previous) => [...previous, ...eventPayload.events].slice(-80));
+        }
+        if (terminalStatuses.includes(nextAudit.status)) setScreen('report');
+      } catch (error) { if (active) setAppError(error instanceof Error ? error.message : 'The audit connection was interrupted.'); }
+    };
+    const interval = window.setInterval(poll, 2000);
+    void poll();
+    return () => { active = false; window.clearInterval(interval); };
+  }, [audit?.id, screen]);
+
+  const cancelAudit = async () => {
+    if (!audit) return;
+    try {
+      await apiJson(`/audits/${encodeURIComponent(audit.id)}/cancel`, { method: 'POST' });
+      const nextAudit = await getAudit(audit.id);
+      setAudit(nextAudit);
+      if (terminalStatuses.includes(nextAudit.status)) setScreen('report');
+    } catch (error) { setAppError(error instanceof Error ? error.message : 'Could not stop the audit.'); }
+  };
+
+  const home = () => { window.history.replaceState({}, '', window.location.pathname); setScreen('form'); setAudit(null); setEvents([]); setAppError(''); };
+  return <div className="app-shell"><Header health={health} onHome={home} />{appError && <div className="global-alert" role="alert"><Icon name="x" size={16} />{appError}<button type="button" onClick={() => setAppError('')} aria-label="Dismiss message"><Icon name="x" size={15} /></button></div>}{screen === 'form' && <HomeForm health={health} onStarted={startAudit} />}{screen === 'running' && audit && <RunningView audit={audit} events={events} onCancel={cancelAudit} />}{screen === 'report' && audit && <ReportView audit={audit} onNewAudit={home} />}<footer className="site-footer"><span>blindspot / 2026</span><span>Built for more ways to navigate</span><span>WCAG 2.2 · evidence-led review</span></footer></div>;
+}

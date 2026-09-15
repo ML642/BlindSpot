@@ -1,0 +1,35 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BlindSpot broken fixture</title>
+  <style>
+    body { margin: 0; font-family: Arial, sans-serif; color: #222; }
+    .shell { width: 900px; padding: 24px; }
+    .error-indicator { width: 14px; height: 14px; background: #d00; }
+    .ticker { animation: slide 2s linear infinite; }
+    .tiny { width: 12px; height: 12px; padding: 0; }
+    .clip { width: 180px; height: 18px; overflow: hidden; }
+    @keyframes slide { from { transform: translateX(0); } to { transform: translateX(40px); } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header><h1>Sign in</h1></header>
+    <main>
+      <h3>Account details</h3>
+      <p class="clip">This instruction becomes clipped when text spacing is increased.</p>
+      <img src="/decorative-but-missing-alt.png">
+      <form>
+        <input type="email" placeholder="Email address">
+        <input type="password" placeholder="Password">
+        <button class="tiny" type="submit"><span aria-hidden="true">→</span></button>
+        <button type="button" tabindex="3">Need help?</button>
+      </form>
+      <div class="error-indicator" aria-invalid="true"></div>
+      <video width="320" height="180" autoplay loop></video>
+      <div class="ticker">New account activity</div>
+    </main>
+  </div>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>BlindSpot login modal fixture</title>
+  <style>
+    body { margin: 0; font-family: system-ui, sans-serif; color: #18212f; }
+    .shell { max-width: 720px; margin: auto; padding: 2rem; }
+    button { min-height: 44px; padding: .6rem 1rem; }
+    dialog { max-width: 28rem; border: 1px solid #64748b; border-radius: .5rem; }
+    dialog::backdrop { background: rgb(0 0 0 / .55); }
+    label { display: block; margin-top: 1rem; }
+    input { display: block; width: 100%; min-height: 2.5rem; box-sizing: border-box; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header><h1>Example shop</h1></header>
+    <main>
+      <h2>Returning customer</h2>
+      <p>Open the sign-in dialog to continue with the example order.</p>
+      <button id="open-login" type="button">Sign in</button>
+      <p id="status" role="status" aria-live="polite"></p>
+    </main>
+  </div>
+  <dialog id="login-dialog" aria-labelledby="login-title">
+    <form method="dialog" id="login-form">
+      <h2 id="login-title">Sign in</h2>
+      <p id="login-help">Use the example values; no network request is made.</p>
+      <label for="modal-email">Email address</label>
+      <input id="modal-email" name="email" type="email" autocomplete="email" required>
+      <label for="modal-password">Password</label>
+      <input id="modal-password" name="password" type="password" autocomplete="current-password" required>
+      <button type="submit">Continue</button>
+      <button type="button" id="close-login">Cancel</button>
+    </form>
+  </dialog>
+  <script>
+    const dialog = document.querySelector('#login-dialog');
+    document.querySelector('#open-login').addEventListener('click', () => dialog.showModal());
+    document.querySelector('#close-login').addEventListener('click', () => dialog.close());
+    document.querySelector('#login-form').addEventListener('submit', (event) => {
+      event.preventDefault();
+      dialog.close();
+      document.querySelector('#status').textContent = 'Example sign-in completed.';
+    });
+  </script>
+</body>
+</html>
