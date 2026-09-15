@@ -49,7 +49,7 @@ Automation cannot establish full accessibility. Caption presence does not establ
 
 Cloudflare challenge responses (`cf-mitigated: challenge`), recognizable Cloudflare verification interstitials, and main-page HTTP 403/429 stop the audit with a blocked scenario and preserved page evidence. These pages are not passed to accessibility checkers or Gemini specialists as if they were the requested site. Detection is conservative: simply embedding Turnstile or mentioning Cloudflare does not trigger a block. Existing time, action, page-state and model-turn limits remain the fallback for unrecognized stalls. BlindSpot does not solve challenges or impersonate verified bots; ask the site owner to authorize access or provide a staging environment. See [Cloudflare challenge detection](https://developers.cloudflare.com/cloudflare-challenges/challenge-types/challenge-pages/detect-response/) and [verified bot authentication](https://developers.cloudflare.com/bots/reference/bot-verification/web-bot-auth/).
 
-Profiles cover vision, hearing, movement, speech, cognition, learning, attention, memory, sensory sensitivities, photosensitivity, motion sensitivity, temporary impairments, and situational limitations. Playbooks live in `packages/playbooks` and map applicable checks to [WCAG 2.2](https://www.w3.org/TR/WCAG22/).
+Profiles cover vision, hearing, movement, cognition, learning, attention, memory, sensory sensitivities, photosensitivity, motion sensitivity, and temporary impairments. Playbooks live in `packages/playbooks` and map applicable checks to [WCAG 2.2](https://www.w3.org/TR/WCAG22/).
 
 ## Architecture
 
