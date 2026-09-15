@@ -42,25 +42,32 @@ export function HomeForm({ health, onStarted }: { health: Health | null; onStart
     } finally { setDemoBusy(false); }
   };
 
-  return <main className="home-main">
-    <section className="intro-column" aria-labelledby="home-title">
-      <h1 id="home-title">New accessibility audit</h1>
-      <p className="intro-copy">Enter a website and a task. The agent follows the journey in a browser, then checks it against your selected accessibility profiles.</p>
-    </section>
-    <section className="form-panel" aria-labelledby="audit-form-title">
-      <div className="form-panel-top"><div><h2 id="audit-form-title">Website and scenario</h2></div></div>
+  return <main className="home-main simple-home">
+    <section className="home-hero" aria-labelledby="home-title">
+      <div className="intro-column">
+        <h1 id="home-title">See your website’s blind spots.</h1>
+        <p className="intro-copy">Enter a URL to begin an accessibility review.</p>
+      </div>
+      <div className="form-panel" id="get-started">
       <form onSubmit={submit} noValidate>
-        <div className="form-fields"><div className="field-block"><label htmlFor="website-url">Website address</label><div className="input-shell"><span className="input-prefix" aria-hidden="true">↗</span><input id="website-url" value={url} onChange={(event) => setUrl(event.target.value)} spellCheck="false" autoComplete="url" aria-describedby="url-help" /></div><p className="field-help" id="url-help">The agent visits this public URL in a fresh, headless browser.</p></div>
-          <div className="field-block"><label htmlFor="audit-scenario">What should we check?</label><textarea id="audit-scenario" rows={5} value={scenario} onChange={(event) => setScenario(event.target.value)} aria-describedby="scenario-help" /><p className="field-help" id="scenario-help">Include the task, entry point, and what “done” looks like.</p></div>
+        <div className="form-fields">
+          <div className="field-block url-field"><label htmlFor="website-url">Website URL</label><div className="url-entry"><div className="input-shell"><span className="input-prefix" aria-hidden="true">↗</span><input id="website-url" value={url} onChange={(event) => setUrl(event.target.value)} spellCheck="false" autoComplete="url" aria-describedby="url-help" /></div><button className="primary-button" type="submit" disabled={busy || demoBusy}>{busy ? <><span className="spinner" /> Checking…</> : <>Check website <Icon name="arrow" size={18} /></>}</button></div><p className="field-help" id="url-help">Enter a public HTTP or HTTPS address.</p></div>
           {error && <div className="form-error" role="alert"><Icon name="x" size={16} />{error}</div>}
-          <button className="primary-button" type="submit" disabled={busy || demoBusy}>{busy ? <><span className="spinner" /> Starting audit…</> : <>Run accessibility audit <Icon name="arrow" size={18} /></>}</button>
-          <div className="form-footer"><span>You can stop the audit at any time</span><span className="footer-dot" /><span>{health?.geminiConfigured ? 'Powered by Gemini' : 'Provider not configured'}</span></div>
+          <details className="audit-options">
+            <summary>Audit options</summary>
+            <div className="field-block"><label htmlFor="audit-scenario">What should we check?</label><textarea id="audit-scenario" rows={5} value={scenario} onChange={(event) => setScenario(event.target.value)} aria-describedby="scenario-help" /><p className="field-help" id="scenario-help">Include the task, entry point, and what “done” looks like.</p></div>
+            <ProfilePicker selected={selected} onChange={setSelected} />
+          </details>
+          <div className="form-footer"><span>You can stop the audit at any time</span><span className="footer-dot" /><span>{health?.geminiConfigured ? 'AI review ready' : 'Provider not configured'}</span></div>
         </div>
-        <ProfilePicker selected={selected} onChange={setSelected} />
       </form>
       <div className="demo-divider"><span>or</span></div>
       <button type="button" className="demo-button" onClick={demo} disabled={busy || demoBusy}>{demoBusy ? <><span className="spinner spinner-dark" /> Loading sample…</> : <><Icon name="external" size={16} /> Explore a sample report <Icon name="arrow" size={16} /></>}</button>
-      <p className="demo-note">An illustrative sign-in page with real browser checks. It does not contact Gemini.</p>
+      </div>
+    </section>
+    <section className="home-info" id="info" aria-labelledby="info-title">
+      <h2 id="info-title">Accessibility through real user journeys.</h2>
+      <p>BlindSpot visits your website, follows a task, and reports barriers with practical evidence and recommendations.</p>
     </section>
   </main>;
 }
