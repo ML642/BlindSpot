@@ -90,7 +90,9 @@ export class BrowserSession {
       locale: 'en-US',
     });
     const page = await context.newPage();
-    context.on('page', (popup) => { if (popup !== page) { options.emit({ type: 'warning', message: 'A popup was blocked during the audit.' }); void popup.close(); } });
+    // axe creates a trusted, opener-less page to aggregate frame results.
+    // Only website-created popups belong to this event; context 'page' is broader.
+    page.on('popup', (popup) => { options.emit({ type: 'warning', message: 'A popup was blocked during the audit.' }); void popup.close().catch(() => undefined); });
     page.on('download', (download) => { options.emit({ type: 'warning', message: `A download was blocked: ${download.suggestedFilename()}` }); void download.cancel(); });
     await context.routeWebSocket('**/*', socket => socket.close());
     await context.route('**/*', async (route) => {

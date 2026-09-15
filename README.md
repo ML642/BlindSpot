@@ -29,7 +29,7 @@ npm start
 
 `test:ui` checks the built app at desktop and mobile sizes, sample-report navigation, filters, export, and axe diagnostics. The sample runs real browser checks on a generated illustrative page, without Gemini.
 
-Known validation limits: live Gemini and GCP require your credentials and have not been exercised in this workspace. The dependency audit currently reports two moderate transitive alerts (`gaxios` / `uuid`); resolve these before exposing the service beyond a controlled hackathon demo.
+Live Gemini 3.8 Flash has been verified with a complete local one-profile audit of example.com. Individual results still require review; this smoke test is not a guarantee of correctness on arbitrary sites. The dependency audit currently reports two moderate transitive alerts (`gaxios` / `uuid`); resolve these before exposing the service beyond a controlled hackathon demo.
 
 ## What an audit does
 

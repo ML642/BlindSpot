@@ -41,7 +41,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     dataDir: path.resolve(env.BLINDSPOT_DATA_DIR ?? path.join(root, '.data')),
     webDistDir: path.resolve(env.BLINDSPOT_WEB_DIST ?? path.join(root, 'apps', 'web', 'dist')),
     geminiApiKey: env.GEMINI_API_KEY ?? env.GOOGLE_API_KEY,
-    geminiModel: env.GEMINI_MODEL ?? 'gemini-2.5-flash',
+    geminiModel: env.GEMINI_MODEL ?? 'gemini-3.8-flash',
     executionMode,
     gcpProject: env.GCP_PROJECT ?? env.GOOGLE_CLOUD_PROJECT,
     gcpRegion: env.GCP_REGION ?? 'europe-central2',

@@ -1,0 +1,12 @@
+.gcloudignore
+.git
+node_modules
+**/node_modules
+.env
+.env.*
+.data
+**/dist
+artifacts
+test-results
+playwright-report
+*.tsbuildinfo
