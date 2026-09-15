@@ -22,6 +22,7 @@ export interface ServerConfig {
   gcsBucket?: string;
   fixtureTarget?: string;
   maxAuditMinutes: number;
+  maxConcurrentAudits: number;
   maxActions: number;
   maxPageStates: number;
   maxSpecialists: number;
@@ -49,6 +50,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     gcsBucket: env.GCS_BUCKET,
     fixtureTarget: env.BLINDSPOT_DEMO_TARGET,
     maxAuditMinutes: positiveInt(env.BLINDSPOT_MAX_AUDIT_MINUTES, 10),
+    maxConcurrentAudits: positiveInt(env.BLINDSPOT_MAX_CONCURRENT_AUDITS, executionMode === 'gcp' ? 15 : 2),
     maxActions: positiveInt(env.BLINDSPOT_MAX_ACTIONS, 30),
     maxPageStates: positiveInt(env.BLINDSPOT_MAX_PAGE_STATES, 5),
     maxSpecialists: Math.min(3, positiveInt(env.BLINDSPOT_MAX_SPECIALISTS, 3)),

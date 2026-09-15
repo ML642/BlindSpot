@@ -28,8 +28,8 @@ foreach ($account in @($apiAccount, $workerAccount)) {
   Invoke-Gcloud secrets add-iam-policy-binding $GeminiSecret --member="serviceAccount:$account" --role=roles/secretmanager.secretAccessor --project=$Project
 }
 Invoke-Gcloud builds submit $taskRoot --tag=$taskImage --project=$Project
-$commonEnv = "BLINDSPOT_EXECUTION_MODE=gcp,GCP_PROJECT=$Project,GCP_REGION=$Region,GCP_JOB_NAME=blindspot-worker,GCS_BUCKET=$taskBucket,GEMINI_MODEL=$Model"
-Invoke-Gcloud run jobs deploy blindspot-worker --image=$taskImage --region=$Region --project=$Project --service-account=$workerAccount --tasks=1 --parallelism=1 --max-retries=0 --task-timeout=660s --cpu=2 --memory=4Gi --command=node --args=--import,tsx,apps/server/src/worker-entry.ts --set-env-vars=$commonEnv --set-secrets="GEMINI_API_KEY=${GeminiSecret}:latest"
+$commonEnv = "BLINDSPOT_EXECUTION_MODE=gcp,GCP_PROJECT=$Project,GCP_REGION=$Region,GCP_JOB_NAME=blindspot-worker,GCS_BUCKET=$taskBucket,GEMINI_MODEL=$Model,BLINDSPOT_MAX_CONCURRENT_AUDITS=15"
+Invoke-Gcloud run jobs deploy blindspot-worker --image=$taskImage --region=$Region --project=$Project --service-account=$workerAccount --tasks=1 --parallelism=1 --max-retries=0 --task-timeout=660s --cpu=4 --memory=8Gi --command=node --args=--import,tsx,apps/server/src/worker-entry.ts --set-env-vars=$commonEnv --set-secrets="GEMINI_API_KEY=${GeminiSecret}:latest"
 # Required specifically for jobs.run with the audit-id environment override.
 Invoke-Gcloud run jobs add-iam-policy-binding blindspot-worker --region=$Region --project=$Project --member="serviceAccount:$apiAccount" --role=roles/run.jobsExecutorWithOverrides
 Invoke-Gcloud run deploy blindspot --image=$taskImage --region=$Region --project=$Project --service-account=$apiAccount --allow-unauthenticated --cpu=1 --memory=2Gi --max=1 --concurrency=16 --timeout=120s --set-env-vars=$commonEnv --set-secrets="GEMINI_API_KEY=${GeminiSecret}:latest"

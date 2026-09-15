@@ -13,7 +13,7 @@ Install and authenticate the Google Cloud CLI. The deploying account needs permi
 Set `-Region` or `-Model` when needed. The script checks the secret, builds from the repository root, deploys the worker and service, grants bucket access and permission to start that job with an audit-id override, then prints the URL. Only the audit ID is sent in an execution override. The worker loads the request from the bucket and its key from Secret Manager.
 Use `-GeminiSecret GEMINI_API_KEY` if your existing secret has that name instead of `blindspot-gemini`. The default model is `gemini-3.8-flash`. `.gcloudignore` excludes local credentials and audit data from uploaded build sources.
 
-The API is limited to one instance for the hackathon admission limiter (two active audits, ten POST requests per IP per minute). The worker has 2 vCPU/4 GiB; the API has 1 vCPU/2 GiB because the sample report renders a local browser. Keep maximum instances at one until admission/rate limits use a shared transactional store. There is no user authentication: report IDs act as bearer links.
+The API is limited to one instance for the hackathon admission limiter. GCP allows 15 active audits by default, configurable with `BLINDSPOT_MAX_CONCURRENT_AUDITS`. Local development defaults to two. The POST limit per IP per minute is twice the audit limit, with a minimum of ten. Each audit runs a separate worker execution with 4 vCPU/8 GiB. The API has 1 vCPU/2 GiB because the sample report renders a local browser. Keep maximum instances at one until admission/rate limits use a shared transactional store. There is no user authentication. Report IDs act as bearer links. GCP and Gemini quotas still apply independently of these application limits.
 
 ## Verification
 

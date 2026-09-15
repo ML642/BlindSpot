@@ -31,7 +31,7 @@ export class AuditManager {
         throw Object.assign(new Error('Configure GEMINI_API_KEY on the server to run a live audit. The sample report is available without a key.'), { statusCode: 503 });
       }
       const active = (await this.store.loadAudits()).filter(a => !terminalStatuses.includes(a.status) && Date.now() - Date.parse(a.createdAt) < (this.config.maxAuditMinutes * 60_000 + 60_000));
-      if (active.length >= 2) throw Object.assign(new Error('Two audits are already running. Please try again after one finishes.'), { statusCode: 429 });
+      if (active.length >= this.config.maxConcurrentAudits) throw Object.assign(new Error(`All ${this.config.maxConcurrentAudits} audit slots are in use. Try again after one finishes.`), { statusCode: 429 });
       const now = new Date().toISOString();
       const audit: Audit = { id: randomUUID(), request, status: 'queued', createdAt: now, updatedAt: now, pageStates: [], progress: { phase: 'Queued', completedProfiles: 0, totalProfiles: request.profileIds.length } };
       await this.store.saveAudit(audit); await this.store.saveEvents?.(audit.id, []);

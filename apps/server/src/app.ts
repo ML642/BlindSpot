@@ -20,7 +20,7 @@ export async function createApp(config: ServerConfig = loadConfig()) {
     const now = Date.now();
     for (const [key, rate] of rates) if (rate.reset <= now) rates.delete(key);
     const rate = rates.get(request.ip) ?? { count: 0, reset: now + 60_000 }; rates.set(request.ip, rate);
-    if (++rate.count > 10) return reply.code(429).send({ error: 'Too many requests. Please wait a minute.' });
+    if (++rate.count > Math.max(10, config.maxConcurrentAudits * 2)) return reply.code(429).send({ error: 'Too many requests. Please wait a minute.' });
   });
   app.setErrorHandler((error, _request, reply) => {
     const failure = error as { statusCode?: number; message?: string };
