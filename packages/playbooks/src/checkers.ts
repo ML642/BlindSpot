@@ -341,7 +341,8 @@ export async function runAutomatedChecks(context: CheckerContext, requestedProfi
   const selectedIds = new Set<string>(selected.map(p => p.id));
   const signals = await collectDomSignals(context.page);
   const probes = context.skipInteractionProbes ? { keyboard: { attempted: false, repeatedFocus: false, focusSequence: [], focusableCount: 0 }, reflow: { attempted: false, horizontalOverflow: undefined }, textResize: { attempted: false, overflowCount: undefined }, textSpacing: { attempted: false, overflowCount: undefined }, reducedMotion: { attempted: false, animatedAfterPreference: undefined }, evidence: [] } : await runInteractionProbes({ ...context, page: context.probePage ?? context.page });
-  const axe = addAxeFindings(context, await axeResults(context), selectedIds);
+  const axeOutput = await axeResults(context);
+  const axe = addAxeFindings(context, axeOutput, selectedIds);
   const findings: Finding[] = [...axe.findings];
   const evidence: Evidence[] = [...axe.evidence, ...probes.evidence];
   const checksByProfile = new Map<ProfileId, PlaybookResult['checks']>();
@@ -357,6 +358,15 @@ export async function runAutomatedChecks(context: CheckerContext, requestedProfi
   for (const profile of selected) {
     const ruleFindings = axe.findings.filter(f => f.profileIds.includes(profile.id));
     for (const item of ruleFindings) checksByProfile.get(profile.id)!.push(check(`axe-${item.id}`, 'Automated axe rules', item.status, 'tool', item.evidence, `${item.title}: ${item.description}`));
+  }
+  for (const rule of axeOutput?.passes ?? []) {
+    const applicableProfiles = axeProfiles(rule.id).filter(profileId => selectedIds.has(profileId));
+    if (!applicableProfiles.length) continue;
+    const passEvidence = signalEvidence(context, 'axe', `${rule.help}: axe reported this rule passed for the captured page state.`, undefined, rule.helpUrl);
+    evidence.push(passEvidence);
+    for (const profileId of applicableProfiles) {
+      checksByProfile.get(profileId)!.push(check(`axe-pass-${rule.id}`, rule.help, 'pass', 'tool', [passEvidence], 'axe found no violations for this rule in the captured page state.'));
+    }
   }
   if (probes.keyboard.repeatedFocus) {
     const p = ['blindness', 'motor', 'paralysis'].filter(id => selectedIds.has(id)) as ProfileId[];

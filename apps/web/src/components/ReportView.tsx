@@ -8,6 +8,24 @@ function Metric({ value, label, tone = '' }: { value: string | number; label: st
   return <div className={`metric ${tone}`}><strong>{value}</strong><span>{label}</span></div>;
 }
 
+type ReviewCheck = NonNullable<Audit['report']>['profiles'][number]['checks'][number];
+
+function countChecks(checks: readonly ReviewCheck[]) {
+  return {
+    pass: checks.filter(check => check.status === 'pass').length,
+    needsReview: checks.filter(check => check.status === 'needs_review').length,
+    omitted: checks.filter(check => check.status === 'not_applicable').length,
+    blocked: checks.filter(check => check.status === 'blocked').length,
+    fail: checks.filter(check => check.status === 'fail').length,
+  };
+}
+
+function CheckCounts({ checks, compact = false }: { checks: readonly ReviewCheck[]; compact?: boolean }) {
+  const counts = countChecks(checks);
+  const label = `${counts.pass} passed, ${counts.needsReview} need review, ${counts.omitted} omitted, ${counts.blocked} blocked, ${counts.fail} failed`;
+  return <span className={`check-counts ${compact ? 'check-counts-compact' : ''}`} aria-label={label}><span className="count-pass" aria-hidden="true"><Icon name="check" size={12} />{counts.pass} passed</span><span className="count-review" aria-hidden="true">{counts.needsReview} review</span><span className="count-omitted" aria-hidden="true">{counts.omitted} omitted</span><span className="count-blocked" aria-hidden="true">{counts.blocked} blocked</span><span className="count-fail" aria-hidden="true">{counts.fail} failed</span></span>;
+}
+
 function FindingCard({ finding, selected, onSelect }: { finding: Finding; selected: boolean; onSelect: () => void }) {
   return <button type="button" className={`finding-card ${selected ? 'is-selected' : ''}`} onClick={onSelect} aria-pressed={selected}><span className={`severity-mark severity-${finding.severity}`} aria-hidden="true" /><span className="finding-card-copy"><span className="finding-card-top"><span className={statusClass(finding.status)}>{formatStatus(finding.status)}</span><span>{finding.method === 'tool' ? 'Tool check' : 'Agent review'}</span></span><strong>{finding.title}</strong><span className="finding-card-meta">{finding.wcag[0]?.id || 'Review'} <span>·</span> {finding.profileIds.length} profile{finding.profileIds.length === 1 ? '' : 's'}</span></span><Icon name="chevron" size={17} /></button>;
 }
@@ -15,7 +33,27 @@ function FindingCard({ finding, selected, onSelect }: { finding: Finding; select
 function Coverage({ audit }: { audit: Audit }) {
   const report = audit.report;
   if (!report) return null;
-  return <section className="coverage-panel" aria-labelledby="coverage-title"><div className="coverage-panel-head"><div><h2 id="coverage-title">Profile coverage</h2></div><span>{report.profiles.length} playbooks run</span></div><div className="coverage-grid">{report.profiles.map((profile) => { const profileName = profiles.find((item) => item.id === profile.profileId)?.name ?? profile.profileId; return <details className="coverage-profile" key={profile.profileId}><summary><span className={`coverage-state state-${profile.status.replace('_', '-')}`}><span />{formatStatus(profile.status)}</span><strong>{profileName}</strong><span className="coverage-check-count">{profile.checks.filter((check) => check.status === 'fail').length} failed · {profile.checks.length} checks</span><Icon name="chevron" size={14} /></summary><div className="coverage-checks">{profile.checks.map((check) => <div className="coverage-check" key={check.id}><span className={`check-indicator check-${check.status.replace('_', '-')}`}>{check.status === 'pass' ? '✓' : check.status === 'fail' ? '!' : '·'}</span><span><strong>{check.title}</strong><small>{check.notes || 'No additional notes.'}</small></span><span className="check-method">{formatStatus(check.status)} · {check.method}</span></div>)}</div></details>; })}</div></section>;
+  const allChecks = [...new Map(report.profiles.flatMap(profile => profile.checks).map(check => [`${check.method}|${check.id}|${check.status}|${check.title}|${check.notes}`, check])).values()];
+  return <section className="coverage-panel" aria-labelledby="coverage-title">
+    <div className="coverage-panel-head"><div><h2 id="coverage-title">Accessibility review</h2></div><span>{report.profiles.length} playbooks run</span></div>
+    <div className="review-totals"><strong>All checks</strong><CheckCounts checks={allChecks} /></div>
+    <div className="coverage-grid">{report.profiles.map((profile) => {
+      const profileName = profiles.find((item) => item.id === profile.profileId)?.name ?? profile.profileId;
+      return <details className="coverage-profile" key={profile.profileId}>
+        <summary>
+          <span className={`coverage-state state-${profile.status.replace('_', '-')}`}>{profile.status === 'pass' ? <Icon name="check" size={13} /> : <span />}{formatStatus(profile.status)}</span>
+          <strong>{profileName}</strong>
+          <CheckCounts checks={profile.checks} compact />
+          <Icon name="chevron" size={14} />
+        </summary>
+        <div className="coverage-checks">{profile.checks.map((check) => <div className="coverage-check" key={check.id}>
+          <span className={`check-indicator check-${check.status.replace('_', '-')}`} aria-label={formatStatus(check.status)}>{check.status === 'pass' ? <Icon name="check" size={11} /> : check.status === 'fail' ? '!' : check.status === 'not_applicable' ? '-' : '·'}</span>
+          <span><strong>{check.title}</strong><small>{check.notes || 'No additional notes.'}</small></span>
+          <span className="check-method">{formatStatus(check.status)} / {check.method}</span>
+        </div>)}</div>
+      </details>;
+    })}</div>
+  </section>;
 }
 
 function ReportDetail({ audit, finding }: { audit: Audit; finding?: Finding }) {

@@ -179,3 +179,27 @@ textarea { font-size: 14px; min-height: 175px; }
   .coverage-panel-head { flex-wrap: wrap; }
   .report-main h1 { font-size: 32px; }
 }
+
+.review-totals { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 13px 0; border-bottom: 1px solid var(--line); }
+.review-totals > strong { color: var(--muted); font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; }
+.check-counts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 5px 10px; color: var(--soft); font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+.check-counts > span { display: inline-flex; align-items: center; gap: 3px; padding: 4px 6px; border: 1px solid var(--line); background: white; }
+.check-counts-compact { justify-content: flex-start; }
+.check-counts-compact > span { padding: 0; border: 0; background: transparent; }
+.count-pass { color: var(--green); font-weight: 700; }
+.count-review { color: var(--amber); }
+.count-omitted, .count-blocked { color: var(--soft); }
+.count-fail { color: var(--red); font-weight: 700; }
+.coverage-profile summary { grid-template-columns: 105px minmax(0, 1fr) 15px; grid-template-areas: "state name toggle" "counts counts counts"; }
+.coverage-profile summary > .coverage-state { grid-area: state; }
+.coverage-profile summary > strong { grid-area: name; grid-column: auto; grid-row: auto; }
+.coverage-profile summary > .check-counts { grid-area: counts; padding-top: 3px; }
+.coverage-profile summary > svg { grid-area: toggle; }
+.coverage-state > svg { flex: 0 0 auto; }
+.check-indicator svg { display: block; }
+.check-blocked { color: #687c90; background: #f4f7f9; }
+.check-not-applicable { color: #687c90; background: #f7f8f9; }
+@media (max-width: 600px) {
+  .review-totals { align-items: flex-start; flex-direction: column; }
+  .review-totals .check-counts { justify-content: flex-start; white-space: normal; }
+}

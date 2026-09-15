@@ -1,7 +1,7 @@
 import type { Audit } from '@blindspot/shared';
 
 export function formatStatus(status: string) {
-  return status === 'needs_review' ? 'Needs review' : status.charAt(0).toUpperCase() + status.slice(1);
+  return status.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 }
 
 export function statusClass(status: string) {
