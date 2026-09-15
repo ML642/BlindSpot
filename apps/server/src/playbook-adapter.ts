@@ -1,18 +1,12 @@
-import type { Finding, PlaybookResult, ProfileId, AuditEvent, Evidence, TestStatus } from '@blindspot/shared';
+import type { Finding, PlaybookResult, ProfileId, Evidence, TestStatus } from '@blindspot/shared';
 import { profiles } from '@blindspot/shared';
 import type { Page } from 'playwright';
 import type { PageSnapshot } from './browser.js';
 import { runAutomatedChecks, aggregateFindings } from '@blindspot/playbooks';
 
-export interface PlaybookInput { scenario: string; profiles: ProfileId[]; snapshots: PageSnapshot[]; maxSpecialists: number; }
 export interface PlaybookOutput { profiles: PlaybookResult[]; findings: Finding[]; limitations: string[]; evidence?: Evidence[]; }
 export type LiveResult = { findings: Finding[]; profiles: PlaybookResult[]; evidence?: Evidence[]; limitations?: string[] };
 
-async function loadModule(): Promise<any | undefined> {
-  try { const packageName = '@blindspot/playbooks'; return await import(packageName); } catch { return undefined; }
-}
-
-/** Run deterministic checkers against the live page at capture time. */
 export async function runLiveChecks(page: Page, snapshot: PageSnapshot, requestedProfiles: ProfileId[], addEvidence?: (evidence: Omit<Evidence, 'id'> & { id?: string }) => Evidence, probePage?: Page): Promise<LiveResult> {
   const context = { page, probePage, skipInteractionProbes: !probePage, pageState: snapshot.state, axeResults: snapshot.axe.error ? undefined : { violations: snapshot.axe.violations, passes: snapshot.axe.passedRules }, addEvidence };
   const result = await runAutomatedChecks(context, requestedProfiles);
@@ -30,9 +24,9 @@ export function combinePlaybookResults(results: readonly LiveResult[], requested
   const limitations = new Set(extraLimitations);
   for (const id of requestedProfiles) checks.set(id, []);
   for (const result of results) {
-    for (const finding of result.findings ?? []) findings.set(finding.id, finding);
+    for (const finding of result.findings) findings.set(finding.id, finding);
     for (const limitation of result.limitations ?? []) limitations.add(limitation);
-    for (const profile of result.profiles ?? []) {
+    for (const profile of result.profiles) {
       if (!checks.has(profile.profileId)) continue;
       checks.get(profile.profileId)!.push(...profile.checks);
     }
@@ -40,16 +34,8 @@ export function combinePlaybookResults(results: readonly LiveResult[], requested
   const outputProfiles: PlaybookResult[] = requestedProfiles.map((profileId) => {
     const profile = profiles.find((item) => item.id === profileId);
     const profileChecks = checks.get(profileId) ?? [];
-    const status = profileChecks.reduce<TestStatus>((current, item) => statusRank(item.status) > statusRank(current) ? item.status : current, profileChecks.length ? 'pass' : 'needs_review');
-    return { profileId, status, summary: status === 'fail' ? 'One or more automated checks found issues.' : status === 'needs_review' ? 'Automated checks require specialist or manual review.' : status === 'pass' ? 'Automated checks found no failures.' : `No applicable checks ran for ${profile?.name ?? profileId}.`, checks: profileChecks.length ? profileChecks : [{ id: `${profileId}-specialist-review`, title: 'Scenario and assistive technology review', status: 'needs_review', method: 'gemini', evidenceIds: [], notes: 'Static browser checks cannot fully verify this impairment scenario.' }] };
+    const status = profileChecks.reduce<TestStatus>((current, item) => statusRank(item.status) > statusRank(current) ? item.status : current, profileChecks.length ? 'not_applicable' : 'needs_review');
+    return { profileId, status, summary: status === 'fail' ? 'One or more automated checks found issues.' : status === 'needs_review' ? 'Automated checks require specialist or manual review.' : status === 'pass' ? 'Automated checks found no failures.' : status === 'blocked' ? 'One or more checks could not run; review the limitations.' : `No applicable checks ran for ${profile?.name ?? profileId}.`, checks: profileChecks.length ? profileChecks : [{ id: `${profileId}-specialist-review`, title: 'Scenario and assistive technology review', status: 'needs_review', method: 'gemini', evidenceIds: [], notes: 'Static browser checks cannot fully verify this impairment scenario.' }] };
   });
   return { profiles: outputProfiles, findings: aggregateFindings([...findings.values()]), limitations: [...limitations], evidence: [...new Map(results.flatMap(result => [...(result.evidence ?? []), ...result.findings.flatMap(f => f.evidence)]).map(e => [e.id, e])).values()] };
-}
-
-export function unavailablePlaybooks(requestedProfiles: ProfileId[], reason: string): PlaybookOutput {
-  return { profiles: requestedProfiles.map((profileId) => ({ profileId, status: 'needs_review', summary: 'Playbook package unavailable; manual review required.', checks: [{ id: `${profileId}-unavailable`, title: 'Playbook execution', status: 'needs_review', method: 'gemini', evidenceIds: [], notes: reason }] })), findings: [], limitations: [reason, 'Automated checks are a triage aid and do not establish WCAG conformance.'] };
-}
-
-export function diagnosticsEvent(profileIds: ProfileId[]): Omit<AuditEvent, 'id' | 'timestamp'> {
-  return { type: 'profile', message: `Accessibility checkers started for ${profileIds.length} profile${profileIds.length === 1 ? '' : 's'}.` };
 }

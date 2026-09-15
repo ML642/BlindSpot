@@ -23,8 +23,9 @@ export async function createApp(config: ServerConfig = loadConfig()) {
     if (++rate.count > 10) return reply.code(429).send({ error: 'Too many requests. Please wait a minute.' });
   });
   app.setErrorHandler((error, _request, reply) => {
-    const status = error instanceof z.ZodError || error instanceof UnsafeUrlError ? 400 : typeof error.statusCode === 'number' ? error.statusCode : 500;
-    reply.code(status).send({ error: error instanceof z.ZodError ? error.issues.map(i => i.message).join('; ') : status < 500 || status === 503 ? error.message : 'The request could not be completed. Check server configuration.' });
+    const failure = error as { statusCode?: number; message?: string };
+    const status = error instanceof z.ZodError || error instanceof UnsafeUrlError ? 400 : typeof failure.statusCode === 'number' ? failure.statusCode : 500;
+    reply.code(status).send({ error: error instanceof z.ZodError ? error.issues.map(i => i.message).join('; ') : status < 500 || status === 503 ? failure.message : 'The request could not be completed. Check server configuration.' });
   });
   app.get('/api/health', async () => ({ geminiConfigured: Boolean(config.geminiApiKey), mode: config.executionMode }));
   app.post('/api/audits', async (request, reply) => { const audit = await manager.create(request.body); return reply.code(202).send({ id: audit.id }); });

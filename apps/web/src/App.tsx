@@ -1,15 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { terminalStatuses } from '@blindspot/shared';
-import type { Audit, AuditEvent } from '@blindspot/shared';
 import { apiJson, getAudit, getEvents, getHealth } from './lib/api';
-import type { Health, Screen } from './lib/types';
+import type { Audit, AuditEvent, Health, Screen } from './lib/types';
 import { HomeForm } from './components/HomeForm';
 import { Icon } from './components/Icon';
 import { ReportView } from './components/ReportView';
 import { RunningView } from './components/RunningView';
 
 function Header({ health, onHome }: { health: Health | null; onHome: () => void }) {
-  return <header className="site-header"><button className="brand" onClick={onHome} aria-label="BlindSpot home"><span className="brand-mark"><span /></span><span>blindspot</span></button><div className="header-meta"><span className="header-note">Accessibility intelligence for the web</span><span className={`connection ${health?.geminiConfigured ? 'is-ready' : 'is-demo'}`}><span className="connection-dot" aria-hidden="true" />{health?.geminiConfigured ? 'Gemini connected' : health ? 'Demo mode' : 'Checking service'}</span></div></header>;
+  return <header className="site-header"><button className="brand" onClick={onHome} aria-label="BlindSpot home"><span className="brand-mark"><span /></span><span>blindspot</span></button><div className="header-meta"><span className="header-note">User journey accessibility</span><span className={`connection ${health?.geminiConfigured ? 'is-ready' : 'is-demo'}`}><span className="connection-dot" aria-hidden="true" />{health?.geminiConfigured ? 'Gemini configured' : health?.mode === 'unavailable' ? 'Service unavailable' : health ? 'Demo mode' : 'Checking service'}</span></div></header>;
 }
 
 export function App() {
@@ -32,7 +31,7 @@ export function App() {
     eventCursor.current = 0;
     setAudit(null); setEvents([]); setAppError(''); setScreen('running');
     window.history.pushState({ auditId }, '', `?audit=${encodeURIComponent(auditId)}`);
-    getAudit(auditId).then(setAudit).catch((error) => setAppError(error instanceof Error ? error.message : 'Could not load the audit.'));
+    getAudit(auditId).then(setAudit).catch((error) => { setAppError(error instanceof Error ? error.message : 'Could not load the audit.'); setScreen('form'); });
   }, []);
 
   useEffect(() => {
@@ -67,5 +66,5 @@ export function App() {
   };
 
   const home = () => { window.history.replaceState({}, '', window.location.pathname); setScreen('form'); setAudit(null); setEvents([]); setAppError(''); };
-  return <div className="app-shell"><Header health={health} onHome={home} />{appError && <div className="global-alert" role="alert"><Icon name="x" size={16} />{appError}<button type="button" onClick={() => setAppError('')} aria-label="Dismiss message"><Icon name="x" size={15} /></button></div>}{screen === 'form' && <HomeForm health={health} onStarted={startAudit} />}{screen === 'running' && audit && <RunningView audit={audit} events={events} onCancel={cancelAudit} />}{screen === 'report' && audit && <ReportView audit={audit} onNewAudit={home} />}<footer className="site-footer"><span>blindspot / 2026</span><span>Built for more ways to navigate</span><span>WCAG 2.2 · evidence-led review</span></footer></div>;
+  return <div className="app-shell"><a className="skip-link" href="#main-content">Skip to content</a><Header health={health} onHome={home} />{appError && <div className="global-alert" role="alert"><Icon name="x" size={16} />{appError}<button type="button" onClick={() => setAppError('')} aria-label="Dismiss message"><Icon name="x" size={15} /></button></div>}<div id="main-content" tabIndex={-1} />{screen === 'running' && !audit && <main className="running-main" aria-busy="true"><h1>Loading audit…</h1><p role="status">Retrieving the latest progress and evidence.</p></main>}{screen === 'form' && <HomeForm health={health} onStarted={startAudit} />}{screen === 'running' && audit && <RunningView audit={audit} events={events} onCancel={cancelAudit} />}{screen === 'report' && audit && <ReportView audit={audit} onNewAudit={home} />}<footer className="site-footer"><span>blindspot / 2026</span><span>Built for more ways to navigate</span><span>WCAG 2.2 · evidence-led review</span></footer></div>;
 }

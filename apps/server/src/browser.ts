@@ -1,12 +1,9 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
-import path from 'node:path';
 import { chromium, type Browser, type BrowserContext, type Page } from 'playwright';
 import { AxeBuilder } from '@axe-core/playwright';
 import type { AuditEvent, PageState } from '@blindspot/shared';
-import type { ArtifactStore, StoredArtifact } from './storage.js';
-import { assertSafeUrl, isFixtureUrl, UnsafeUrlError } from './security.js';
+import type { ArtifactStore } from './storage.js';
+import { assertSafeUrl, UnsafeUrlError } from './security.js';
 import { startNetworkProxy } from './network-proxy.js';
 
 export interface BrowserLimits {
@@ -23,7 +20,6 @@ export interface BrowserOptions extends BrowserLimits {
   signal: AbortSignal;
   emit: (event: Omit<AuditEvent, 'id' | 'timestamp'>) => void;
   onCapture?: (page: Page, snapshot: PageSnapshot, probePage?: Page) => Promise<void>;
-  proxyUrl?: string;
 }
 
 export interface PageSnapshot {
@@ -52,16 +48,12 @@ async function waitForStable(page: Page): Promise<void> {
   await page.waitForTimeout(120);
 }
 
-async function loadProxyFactory(): Promise<((options: { fixtureTarget?: string }) => Promise<{ url: string; close: () => Promise<void> }>) | undefined> {
-  const thisDir = path.dirname(fileURLToPath(import.meta.url));
-  const candidate = existsSync(path.join(thisDir, 'network-proxy.ts')) ? './network-proxy.ts' : './network-proxy.js';
-  try {
-    const moduleName = candidate;
-    const loaded = await import(moduleName) as { startNetworkProxy?: (options: { fixtureTarget?: string }) => Promise<{ url: string; close: () => Promise<void> }> };
-    return loaded.startNetworkProxy;
-  } catch {
-    return undefined;
-  }
+type AriaRole = Parameters<Page['getByRole']>[0];
+
+function controlLocator(page: Page, args: { selector?: string; text?: string; role?: string }) {
+  if (args.selector) return page.locator(args.selector).first();
+  if (args.role) return page.getByRole(args.role as AriaRole, args.text ? { name: args.text } : undefined).first();
+  return page.getByText(args.text ?? '', { exact: false }).first();
 }
 
 export class BrowserSession {
@@ -153,16 +145,16 @@ export class BrowserSession {
     const text = typeof args.text === 'string' && args.text.length <= 200 ? args.text : undefined;
     const role = typeof args.role === 'string' && args.role.length <= 80 ? args.role : undefined;
     if (!selector && !text && !role) throw new Error('click requires selector, text or role');
-    const locator = selector ? this.page.locator(selector).first() : role ? this.page.getByRole(role as any, text ? { name: text } : undefined).first() : this.page.getByText(text as string, { exact: false }).first();
+    const locator = controlLocator(this.page, { selector, text, role });
     const element = await locator.elementHandle({ timeout: 3_000 });
     if (!element) throw new Error('The requested control was not found.');
     const type = await element.getAttribute('type');
     const tag = await element.evaluate((node) => node.tagName.toLowerCase());
-    if (tag === 'input' && (await element.getAttribute('type')) === 'password') throw new Error('Password entry is blocked.');
+    if (tag === 'input' && type === 'password') throw new Error('Password entry is blocked.');
     const formHasPassword = await element.evaluate((node) => Boolean((node as HTMLElement).closest('form')?.querySelector('input[type="password"]')));
     if (formHasPassword && (type === 'submit' || tag === 'button')) throw new Error('Login submission is blocked; only discovery and empty-field validation are allowed.');
     await locator.click({ timeout: 3_000 });
-    this.history.push(page => (selector ? page.locator(selector).first() : role ? page.getByRole(role as any, text ? { name: text } : undefined).first() : page.getByText(text as string).first()).click({ timeout: 3_000 }));
+    this.history.push(page => controlLocator(page, { selector, text, role }).click({ timeout: 3_000 }));
     await this.settle();
     return this.capture(`Activated ${text ?? selector ?? role ?? 'control'}`);
   }

@@ -48,7 +48,6 @@ export interface SpecialistOptions {
 }
 export interface SpecialistOutput { findings: Finding[]; profiles: PlaybookResult[]; limitations: string[]; }
 
-/** Isolated model reviews: fixed playbook, immutable evidence, no page tools or credentials. */
 export async function runSpecialists(options: SpecialistOptions): Promise<SpecialistOutput> {
   const playbooks = getPlaybooks(options.profileIds);
   const results: SpecialistOutput[] = new Array(playbooks.length);

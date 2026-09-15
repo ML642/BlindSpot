@@ -5,7 +5,7 @@ export const API = '/api';
 export async function apiJson<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API}${path}`, {
     ...options,
-    headers: { 'Content-Type': 'application/json', ...(options?.headers ?? {}) },
+    headers: { ...(options?.body ? { 'Content-Type': 'application/json' } : {}), ...(options?.headers ?? {}) },
   });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(typeof payload?.error === 'string' ? payload.error : `Request failed (${response.status})`);

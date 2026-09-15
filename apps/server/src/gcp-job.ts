@@ -1,9 +1,5 @@
-
 export interface CloudRunJobOptions { project?: string; region?: string; jobName?: string; bucket?: string; }
 
-/** Small adapter around the Cloud Run Jobs REST API. The worker image owns
- * browser execution; this process only submits an isolated job with a signed
- * audit id and shared storage configuration. */
 export class CloudRunJobAdapter {
   constructor(private readonly options: CloudRunJobOptions) {}
 

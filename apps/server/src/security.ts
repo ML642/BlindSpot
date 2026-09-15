@@ -30,7 +30,6 @@ restrictedV6.addSubnet('3fff::', 20, 'ipv6');
 const mappedV4 = new net.BlockList();
 mappedV4.addSubnet('::ffff:0:0', 96, 'ipv6');
 
-/** Returns true for RFC1918, loopback, link-local, metadata and other non-public ranges. */
 export function isPrivateAddress(address: string): boolean {
   const normalized = address.replace(/^\[|\]$/g, '').toLowerCase();
   const v4 = ipv4Parts(normalized);
@@ -67,11 +66,6 @@ export function isFixtureUrl(value: string, fixtureTarget?: string): boolean {
   return Boolean(fixtureTarget && sameUrl(value, fixtureTarget));
 }
 
-/**
- * Resolve every address before opening Chromium. The browser is subsequently
- * pinned to the selected public IPv4 by --host-resolver-rules and requests are
- * restricted to the original origin in browser.ts.
- */
 export async function assertSafeUrl(value: string, options: SafeUrlOptions = {}): Promise<URL> {
   let url: URL;
   try {
@@ -108,15 +102,4 @@ export function isLoopbackHost(hostname: string): boolean {
 
 function isMetadataHost(hostname: string): boolean {
   return hostname === 'metadata.google.internal' || hostname === 'metadata' || hostname === '169.254.169.254';
-}
-
-export function publicIpv4(addresses: readonly LookupAddress[]): string | undefined {
-  return addresses.find((entry) => entry.family === 4 && !isPrivateAddress(entry.address))?.address;
-}
-
-export async function resolvePinnedAddress(url: URL, fixtureTarget?: string): Promise<string | undefined> {
-  if (isFixtureUrl(url.toString(), fixtureTarget) && isLoopbackHost(url.hostname)) return undefined;
-  const addresses = await dns.lookup(url.hostname, { all: true, verbatim: true });
-  if (addresses.some((entry) => isPrivateAddress(entry.address))) throw new UnsafeUrlError('The hostname resolved to a restricted address.');
-  return publicIpv4(addresses);
 }

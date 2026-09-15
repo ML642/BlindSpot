@@ -6,9 +6,10 @@
     "build": "npm run build --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "tsx --test tests/*.test.ts",
+    "test:ui": "tsx scripts/ui-smoke.ts",
+    "fixtures": "tsx fixtures/server.ts",
     "start": "npm run start -w @blindspot/server",
     "browser:install": "playwright install chromium"
   },
-  "devDependencies": { "@types/node": "^22.0.0", "concurrently": "^9.0.0", "tsx": "^4.20.0", "typescript": "^5.9.0", "playwright": "^1.55.0" },
-  "overrides": { "uuid": "^11.1.1" }
+  "devDependencies": { "@types/node": "^22.0.0", "concurrently": "^9.0.0", "tsx": "^4.20.0", "typescript": "^5.9.0", "playwright": "^1.55.0" }
 }

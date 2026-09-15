@@ -1,78 +1,51 @@
-import { randomUUID } from 'node:crypto';
-import type { AuditEvent, AuditReport, AuditRequest, AuditStatus, Finding, PageState, ProfileId } from '@blindspot/shared';
-import { BrowserSession, AuditCancelledError, AuditLimitError, type BrowserLimits, type PageSnapshot } from './browser.js';
+import type { AuditEvent, AuditReport, AuditRequest, AuditStatus, PageState } from '@blindspot/shared';
+import { BrowserSession, AuditCancelledError, type BrowserLimits, type PageSnapshot } from './browser.js';
 import type { ArtifactStore } from './storage.js';
-import { diagnosticsEvent, runLiveChecks, combinePlaybookResults, unavailablePlaybooks, type PlaybookOutput, type LiveResult } from './playbook-adapter.js';
+import { runLiveChecks, combinePlaybookResults, type LiveResult } from './playbook-adapter.js';
 import { runGeminiAgent } from './gemini-agent.js';
+import { runSpecialists } from './specialists.js';
+import { isFixtureUrl } from './security.js';
 
 export interface AuditJob { id: string; request: AuditRequest; geminiApiKey?: string; geminiModel: string; fixtureTarget?: string; limits: BrowserLimits; }
 export interface WorkerResult { status: AuditStatus; pageStates: PageState[]; report?: AuditReport; error?: string; }
-
-export interface WorkerDependencies { store: ArtifactStore; emit: (event: Omit<AuditEvent, 'id' | 'timestamp'>) => void; signal: AbortSignal; }
-
-function reportFor(request: AuditRequest, snapshots: readonly PageSnapshot[], outputs: readonly LiveResult[], agentSummary: string, blocked: boolean, packageMissing: string | undefined): AuditReport {
-  const limitations = new Set<string>([
-    'Automated checks are a triage aid and do not establish WCAG conformance.',
-    'Screen readers, switch controls, voice control, caption accuracy and human content review require a person.',
-    'Browser zoom at 200–400% and real assistive technology are not fully emulated by this run.',
-  ]);
-  if (packageMissing) limitations.add(packageMissing);
-  for (const output of outputs) for (const limitation of output.limitations ?? []) limitations.add(limitation);
-  const combined = outputs.length ? combinePlaybookResults(outputs, request.profileIds, [...limitations]) : unavailablePlaybooks(request.profileIds, packageMissing ?? 'No deterministic playbook result was produced.');
-  const findings = combined.findings;
-  const scenarioOutcome = blocked ? 'blocked' : snapshots.length > 1 ? 'completed' : 'partial';
-  return {
-    summary: `${agentSummary} ${findings.length ? `${findings.length} finding${findings.length === 1 ? '' : 's'} require attention.` : 'No automated finding was produced; review the evidence and limitations.'}`,
-    scenarioOutcome,
-    findings,
-    profiles: combined.profiles,
-    limitations: combined.limitations,
-  };
-}
+export interface WorkerDependencies { store: ArtifactStore; emit: (event: Omit<AuditEvent, 'id' | 'timestamp'>) => void; signal: AbortSignal; checkpoint?: (result: WorkerResult) => Promise<void>; }
 
 export async function runAuditJob(job: AuditJob, dependencies: WorkerDependencies): Promise<WorkerResult> {
   const { emit, signal, store } = dependencies;
   let session: BrowserSession | undefined;
-  const liveResults: LiveResult[] = [];
-  let packageMissing: string | undefined;
-  let agentSummary = 'The navigation agent did not complete.';
-  let blocked = false;
-  emit({ type: 'status', message: 'Launching a sandboxed headless browser.' });
-  emit(diagnosticsEvent(job.request.profileIds));
+  const captured: PageSnapshot[] = [];
+  const results: LiveResult[] = [];
+  const limitations = [
+    'Automated checks and Gemini reviews do not establish WCAG conformance.',
+    'Real screen readers, switch controls, voice control and caption quality require human testing.',
+    'Viewport and text-size probes are not full 200–400% browser-zoom testing.',
+    'Only public GET/HEAD/OPTIONS requests are allowed. POST-loaded interfaces, popups and WebSockets may be incomplete.',
+  ];
+  const report = (summary: string, outcome: AuditReport['scenarioOutcome']): AuditReport => ({ summary, scenarioOutcome: outcome, ...combinePlaybookResults(results, job.request.profileIds, limitations) });
   try {
+    emit({ type: 'status', message: 'Opening Chromium and capturing the starting page.' });
     session = await BrowserSession.open({
-      startUrl: job.request.url, fixtureTarget: job.fixtureTarget, store, auditId: job.id, signal,
-      maxActions: job.limits.maxActions, maxPageStates: job.limits.maxPageStates, timeoutMs: job.limits.timeoutMs,
-      emit,
-      onCapture: async (page, snapshot) => {
-        try {
-          const result = await runLiveChecks(page, snapshot, job.request.profileIds, (evidence) => ({ ...evidence, id: evidence.id ?? randomUUID() }));
-          if (result) {
-            liveResults.push(result);
-            emit({ type: 'profile', message: `Deterministic checks completed for page state ${snapshot.state.id}.`, pageStateId: snapshot.state.id });
-          } else packageMissing = 'The accessibility checker package was unavailable; specialist review is required.';
-        } catch (error) {
-          emit({ type: 'warning', message: `Deterministic checkers failed for ${snapshot.state.id}: ${error instanceof Error ? error.message : String(error)}`, pageStateId: snapshot.state.id });
-        }
+      startUrl: job.request.url, fixtureTarget: job.fixtureTarget, store, auditId: job.id, signal, emit,
+      ...job.limits,
+      onCapture: async (page, snapshot, probePage) => {
+        captured.push(snapshot);
+        try { results.push(await runLiveChecks(page, snapshot, job.request.profileIds, undefined, probePage)); }
+        catch { limitations.push(`Deterministic checks could not complete for page state ${snapshot.state.id}.`); emit({ type: 'warning', message: 'Some checkers could not complete for this state.' }); }
+        await dependencies.checkpoint?.({ status: 'running', pageStates: captured.map(s => s.state), report: report('Audit in progress. These are the checks collected so far.', 'partial') });
       },
     });
-    const agent = await runGeminiAgent(session, { apiKey: job.geminiApiKey, model: job.geminiModel, scenario: job.request.scenario, startUrl: job.request.url, emit, signal });
-    agentSummary = agent.summary;
-    blocked = agent.blocked;
-    if (!session.snapshots.length) await session.capture('Final page state');
-    const report = reportFor(job.request, session.snapshots, liveResults, agentSummary, blocked, packageMissing);
-    const status: AuditStatus = blocked ? 'partial' : 'completed';
-    emit({ type: 'status', message: status === 'completed' ? 'Audit completed.' : 'Audit completed with a safety boundary or blocked step.' });
-    return { status, pageStates: session.snapshots.map((snapshot) => snapshot.state), report };
+    const navigation = await runGeminiAgent(session, { apiKey: job.geminiApiKey, model: job.geminiModel, scenario: job.request.scenario, startUrl: job.request.url, emit, signal, allowHeuristic: isFixtureUrl(job.request.url, job.fixtureTarget) });
+    emit({ type: 'status', message: 'Specialists are reviewing the captured journey.' });
+    const specialists = await runSpecialists({ apiKey: job.geminiApiKey, model: job.geminiModel, scenario: job.request.scenario, profileIds: job.request.profileIds, snapshots: captured, store, auditId: job.id, signal, emit });
+    results.push(specialists);
+    if (signal.aborted) throw new AuditCancelledError();
+    const outcome = navigation.outcome;
+    const incomplete = specialists.profiles.some(p => p.checks.some(c => c.status === 'blocked'));
+    return { status: outcome === 'completed' && !incomplete ? 'completed' : 'partial', pageStates: captured.map(s => s.state), report: report(navigation.summary, outcome) };
   } catch (error) {
-    const cancelled = error instanceof AuditCancelledError || signal.aborted;
-    const limited = error instanceof AuditLimitError;
-    const message = cancelled ? 'Audit cancelled; the captured evidence is preserved.' : error instanceof Error ? error.message : String(error);
-    emit({ type: cancelled ? 'warning' : 'error', message });
-    const snapshots = session?.snapshots ?? [];
-    const report = reportFor(job.request, snapshots, liveResults, message, true, packageMissing);
-    return { status: cancelled ? 'cancelled' : snapshots.length ? 'partial' : 'failed', pageStates: snapshots.map((snapshot) => snapshot.state), report, error: limited ? `Audit limit reached: ${message}` : message };
-  } finally {
-    await session?.close();
-  }
+    const cancelled = signal.aborted || error instanceof AuditCancelledError;
+    const message = cancelled ? 'Audit stopped; captured evidence is preserved.' : 'The browser audit stopped before completion. Captured evidence is preserved.';
+    emit({ type: 'warning', message });
+    return { status: cancelled ? 'cancelled' : captured.length ? 'partial' : 'failed', pageStates: captured.map(s => s.state), report: report(message, 'partial'), error: message };
+  } finally { await session?.close(); }
 }
