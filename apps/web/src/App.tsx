@@ -4,11 +4,12 @@ import { apiJson, getAudit, getEvents } from './lib/api';
 import type { Audit, AuditEvent, Screen } from './lib/types';
 import { HomeForm } from './components/HomeForm';
 import { Icon } from './components/Icon';
+import { LogoMark } from './components/LogoMark';
 import { ReportView } from './components/ReportView';
 import { RunningView } from './components/RunningView';
 
 function Header({ onHome, onDemo, demoBusy }: { onHome: () => void; onDemo: () => void; demoBusy: boolean }) {
-  return <header className="site-header"><button className="brand" onClick={onHome} aria-label="BlindSpot home"><span className="brand-mark"><span /></span><span>blindspot</span></button><div className="header-actions"><button type="button" className="header-demo-button" onClick={onDemo} disabled={demoBusy}>{demoBusy ? <><span className="spinner" /> Loading sample…</> : <><Icon name="external" size={16} /> Explore a sample report</>}</button></div></header>;
+  return <header className="site-header"><button className="brand" onClick={onHome} aria-label="BlindSpot home"><LogoMark /><span>blindspot</span></button><div className="header-actions"><button type="button" className="header-demo-button" onClick={onDemo} disabled={demoBusy}>{demoBusy ? <><span className="spinner" /> Loading sample...</> : <><Icon name="external" size={16} /> Explore a sample report</>}</button></div></header>;
 }
 
 export function App() {

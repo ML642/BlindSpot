@@ -60,9 +60,15 @@ try {
   assert.deepEqual(overflowing, [], 'Mobile report overflow');
   const reportMobile = path.join(os.tmpdir(), 'blindspot-report-mobile.png'); await page.screenshot({ path: reportMobile, fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.getByRole('combobox', { name: 'Profile', exact: true }).selectOption('blindness');
-  assert.equal(await page.getByRole('combobox', { name: 'Profile', exact: true }).inputValue(), 'blindness');
-  await page.getByRole('combobox', { name: 'Profile', exact: true }).selectOption('all');
+  const profileToggle = page.locator('.profile-dropdown > summary');
+  assert.equal(await profileToggle.getAttribute('aria-label'), 'Profile: All profiles');
+  await profileToggle.click();
+  await page.getByRole('option', { name: 'Blindness', exact: true }).click();
+  assert.equal(await page.locator('.profile-dropdown[open]').count(), 0, 'Profile menu should close after choosing');
+  assert.equal(await profileToggle.getAttribute('aria-label'), 'Profile: Blindness');
+  await profileToggle.click();
+  await page.getByRole('option', { name: 'All profiles', exact: true }).click();
+  assert.equal(await profileToggle.getAttribute('aria-label'), 'Profile: All profiles');
   const reportAxe = await new AxeBuilder({ page }).analyze();
   const reportShot = path.join(os.tmpdir(), 'blindspot-report.png'); await page.screenshot({ path: reportShot, fullPage: true });
   await location.screenshot({ path: path.join(os.tmpdir(), 'blindspot-finding-location.png') });
