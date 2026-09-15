@@ -14,6 +14,7 @@ export function HomeForm({ onStarted }: { onStarted: (auditId: string) => void }
   const [step, setStep] = useState<FormStep>('url');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+  const [isLetterPulsing, setIsLetterPulsing] = useState(false);
   const transitionTimer = useRef<number | null>(null);
   const urlInput = useRef<HTMLInputElement>(null);
   const scenarioInput = useRef<HTMLTextAreaElement>(null);
@@ -22,6 +23,29 @@ export function HomeForm({ onStarted }: { onStarted: (auditId: string) => void }
 
   useEffect(() => () => {
     if (transitionTimer.current !== null) window.clearTimeout(transitionTimer.current);
+  }, []);
+
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+    let pulseTimer: number;
+    let resetTimer: number;
+    const schedulePulse = () => {
+      const delay = 30_000 + Math.random() * 90_000;
+      pulseTimer = window.setTimeout(() => {
+        setIsLetterPulsing(true);
+        resetTimer = window.setTimeout(() => {
+          setIsLetterPulsing(false);
+          schedulePulse();
+        }, 3_200);
+      }, delay);
+    };
+
+    schedulePulse();
+    return () => {
+      window.clearTimeout(pulseTimer);
+      window.clearTimeout(resetTimer);
+    };
   }, []);
 
   useEffect(() => {
@@ -98,7 +122,7 @@ export function HomeForm({ onStarted }: { onStarted: (auditId: string) => void }
   return <main className="home-main simple-home">
     <section className="home-hero" aria-labelledby="home-title">
       <div className="intro-column">
-        <h1 id="home-title">See your website’s blind spots.</h1>
+        <h1 id="home-title">See your website’s blind sp<span className={`pulsating-letter${isLetterPulsing ? ' is-pulsing' : ''}`}>o</span>ts.</h1>
         <p className="intro-copy">Enter a URL to begin an accessibility review.</p>
       </div>
       <div className="form-panel" id="get-started">
