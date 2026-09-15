@@ -41,7 +41,7 @@ function TraceBrowser({ audit }: { audit: Audit }) {
   const screenshot = artifactUrl(audit.id, page?.screenshotArtifactId);
   const pageUrl = page && safePageUrl(page.url);
   return <div className="trace-browser">
-    <div className="trace-toolbar"><p>Recorded actions and page captures — not an interactive replay.</p><button className="quiet-button" type="button" disabled={loading} onClick={() => downloadFile(`blindspot-${audit.id}-trace.json`, JSON.stringify({ auditId: audit.id, events, pageStates: audit.pageStates, eventLogLoaded: !error && !loading }, null, 2), 'application/json')}>Download trace</button></div>
+    <div className="trace-toolbar"><p>Recorded actions and page captures. Not an interactive replay.</p><button className="quiet-button" type="button" disabled={loading} onClick={() => downloadFile(`blindspot-${audit.id}-trace.json`, JSON.stringify({ auditId: audit.id, events, pageStates: audit.pageStates, eventLogLoaded: !error && !loading }, null, 2), 'application/json')}>Download trace</button></div>
     {loading && <p role="status">Loading saved events…</p>}
     {error && <p role="alert">{error} <button className="quiet-button" type="button" onClick={() => setAttempt(value => value + 1)}>Retry</button></p>}
     {!loading && !error && !events.length && <p>No events were saved for this run. Any captured pages are listed below.</p>}
@@ -53,7 +53,7 @@ function TraceBrowser({ audit }: { audit: Audit }) {
         {page ? <><p>{pageUrl ? <a href={pageUrl} target="_blank" rel="noopener noreferrer">{page.url}</a> : page.url}</p><p>{page.description}</p>
           <div className="trace-artifacts">{([['Rendered DOM', page.domArtifactId], ['Accessibility snapshot', page.accessibilityArtifactId]] as const).map(([label, id]) => id ? <a key={id} href={artifactUrl(audit.id, id)} target="_blank" rel="noopener noreferrer">{label}</a> : null)}</div>
           {screenshot && failedImage !== screenshot ? <figure><a href={screenshot} target="_blank" rel="noopener noreferrer"><img src={screenshot} alt={`Captured state: ${page.title || page.url}`} onError={() => setFailedImage(screenshot)} /></a><figcaption>Saved page state. Open the image for full size.</figcaption></figure> : <p>{screenshot ? 'The saved screenshot could not be loaded.' : 'No screenshot saved for this state.'}</p>}
-        </> : <p>This event has no linked page capture. Use “Navigation and pages” to inspect saved states.</p>}
+        </> : <p>This event has no linked page capture. Select "Navigation and pages" to inspect saved states.</p>}
       </> : <p>No trace entry selected.</p>}
     </section></div>
   </div>;

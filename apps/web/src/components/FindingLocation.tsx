@@ -15,7 +15,7 @@ export function FindingLocation({ audit, finding, children }: { audit: Audit; fi
       <a href={location.screenshotUrl} target="_blank" rel="noopener noreferrer" aria-label="Open full screenshot of affected page">
         <img src={location.screenshotUrl} alt={`Captured page containing this finding: ${location.page?.title || location.pageUrl}`} loading="lazy" decoding="async" onError={() => setImageFailed(true)} />
       </a>
-      <figcaption>Captured page state—not a highlighted element. <a href={location.screenshotUrl} target="_blank" rel="noopener noreferrer">Open full screenshot</a></figcaption>
+      <figcaption>Page capture. Element not highlighted. <a href={location.screenshotUrl} target="_blank" rel="noopener noreferrer">Open full screenshot</a></figcaption>
     </figure> : <p className="location-context">{imageFailed ? 'The saved screenshot could not be loaded.' : 'No screenshot was captured for this page state.'}</p>}
     {location.page && <p className="location-context">Captured {humanDate(location.page.capturedAt)}</p>}
     </div>{children && <div className="finding-guidance">{children}</div>}</div>

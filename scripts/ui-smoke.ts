@@ -39,6 +39,22 @@ try {
   await screenshot.scrollIntoViewIfNeeded();
   await screenshot.evaluate((img: HTMLImageElement) => img.decode());
   assert.ok(await screenshot.evaluate((img: HTMLImageElement) => img.naturalWidth > 0));
+  const originalTitle = await page.locator('#selected-issue-title').innerText();
+  await page.getByRole('button', { name: 'Mark as seen', exact: true }).click();
+  assert.equal(await page.locator('.issue-list-row').last().getAttribute('data-review'), 'seen');
+  assert.equal(await page.locator('#selected-issue-title').innerText(), originalTitle);
+  await page.getByRole('button', { name: 'Undo', exact: true }).click();
+  assert.equal(await page.locator('.issue-list-row').first().getAttribute('data-review'), 'open');
+  await page.getByRole('button', { name: 'Mark as resolved', exact: true }).click();
+  assert.equal(await page.locator('.issue-list-row').last().getAttribute('data-review'), 'resolved');
+  await page.reload();
+  await page.getByRole('heading', { name: 'Accessibility report' }).waitFor();
+  await page.locator('.issue-list-row').filter({ hasText: originalTitle }).click();
+  await page.getByText('Marked resolved by you. Not retested.', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Reopen', exact: true }).click();
+  assert.equal(await page.locator('.issue-list-row').first().getAttribute('data-review'), 'open');
+  await page.getByRole('button', { name: 'Mark as resolved', exact: true }).click();
+  await screenshot.evaluate((img: HTMLImageElement) => img.decode());
   const overflowing = await page.evaluate(() => [...document.querySelectorAll('*')].filter(el => el.getBoundingClientRect().right > innerWidth + 1).map(el => ({ tag: el.tagName, class: el.className, width: el.getBoundingClientRect().width })));
   assert.deepEqual(overflowing, [], 'Mobile report overflow');
   const reportMobile = path.join(os.tmpdir(), 'blindspot-report-mobile.png'); await page.screenshot({ path: reportMobile, fullPage: true });
@@ -50,7 +66,11 @@ try {
   const reportShot = path.join(os.tmpdir(), 'blindspot-report.png'); await page.screenshot({ path: reportShot, fullPage: true });
   await location.screenshot({ path: path.join(os.tmpdir(), 'blindspot-finding-location.png') });
   const downloaded = page.waitForEvent('download'); await page.getByRole('button', { name: 'JSON', exact: true }).click();
-  assert.match((await downloaded).suggestedFilename(), /\.json$/);
+  const reportDownload = await downloaded;
+  assert.match(reportDownload.suggestedFilename(), /\.json$/);
+  const exported = JSON.parse(await fs.readFile((await reportDownload.path())!, 'utf8'));
+  assert.ok(Object.values(exported.manualReview.marks).includes('resolved'));
+  assert.ok(exported.report.findings.some((finding: { status: string }) => finding.status === 'fail'), 'Manual review must not rewrite audit failures');
   // Exercise report category changes, including a genuinely empty selection.
   await page.getByRole('group', { name: 'Result categories' }).getByRole('button', { name: /Suggestions/ }).click();
   await page.getByRole('heading', { name: 'No finding to display' }).waitFor();

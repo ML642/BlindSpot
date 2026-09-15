@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { profiles, findingCopy, findingDisposition, type Audit, type Finding, type FindingDisposition, type ProfileId } from '@blindspot/shared';
 import { artifactUrl } from '../lib/api';
 import { buildMarkdown, downloadFile, formatStatus, humanDate, findingLocation } from '../lib/format';
 import { FindingLocation } from './FindingLocation';
 import { RunTrace } from './RunTrace';
+import { loadReviewMarks, reviewKey, reviewRank, updateReviewMark, type ReviewStatus } from '../lib/review-state';
 import '../report.css';
 import '../issue-workspace.css';
 import '../report-refinement.css';
@@ -29,7 +30,7 @@ function CheckCounts({ checks, compact = false }: { checks: readonly ReviewCheck
   return <span className={`check-counts ${compact ? 'check-counts-compact' : ''}`} aria-label={label}><span className="count-pass" aria-hidden="true"><span>{String.fromCodePoint(0x2713)}</span>{counts.pass} passed</span><span className="count-review" aria-hidden="true">{counts.needsReview} review</span><span className="count-omitted" aria-hidden="true">{counts.omitted} omitted</span><span className="count-blocked" aria-hidden="true">{counts.blocked} blocked</span><span className="count-fail" aria-hidden="true">{counts.fail} failed</span></span>;
 }
 
-function FindingDetail({ audit, finding }: { audit: Audit; finding: Finding }) {
+function FindingDetail({ audit, finding, reviewStatus, onReview }: { audit: Audit; finding: Finding; reviewStatus: ReviewStatus; onReview: (status: ReviewStatus) => void }) {
   const location = findingLocation(audit, finding);
   const disposition = findingDisposition(finding);
   const copy = findingCopy(finding);
@@ -37,6 +38,12 @@ function FindingDetail({ audit, finding }: { audit: Audit; finding: Finding }) {
     <header className="selected-issue-header">
       <div><p className="issue-eyebrow">{location.page?.title || 'Captured page'}</p><h2 id="selected-issue-title">{copy.title}</h2></div>
       <span className={`report-label report-label-${disposition}`}>{labels[disposition]}{disposition === 'confirmed' ? ` · ${finding.severity}` : ''}</span>
+      <div className="finding-review-actions" role="group" aria-label="Review status">
+        {reviewStatus === 'open' && <button type="button" className="quiet-button" onClick={() => onReview('seen')}>Mark as seen</button>}
+        {reviewStatus !== 'resolved' && <button type="button" className="quiet-button" onClick={() => onReview('resolved')}>Mark as resolved</button>}
+        {reviewStatus !== 'open' && <button type="button" className="quiet-button" onClick={() => onReview('open')}>Reopen</button>}
+      </div>
+      <p className="review-scope">{reviewStatus === 'resolved' ? 'Marked resolved by you. Not retested.' : reviewStatus === 'seen' ? 'Marked seen by you. Still needs attention.' : 'Review marks are saved in this browser only.'}</p>
     </header>
     <div className="report-item-body">
       <FindingLocation audit={audit} finding={finding}>
@@ -45,7 +52,7 @@ function FindingDetail({ audit, finding }: { audit: Audit; finding: Finding }) {
       </FindingLocation>
       <details className="report-technical"><summary>Evidence and technical details</summary>
         <p>{copy.impact}</p><p>Original finding: {finding.title}</p><p>{finding.description}</p><p>{finding.recommendation}</p>
-        <p>Reported impact: {finding.severity}. {labels[disposition]} — impact does not indicate certainty.</p>
+        <p>Reported impact: {finding.severity}. {labels[disposition]}. Impact does not indicate certainty.</p>
         <p>Affected profiles: {finding.profileIds.map(id => profiles.find(p => p.id === id)?.name ?? id).join(', ')}.</p>
         <h4>Evidence</h4>
         {finding.evidence.map(evidence => <div key={evidence.id} className="report-evidence"><p>{evidence.description}</p>{evidence.selector && <code>{evidence.selector}</code>}{evidence.value && <p>{evidence.value}</p>}{evidence.artifactId && <a href={artifactUrl(audit.id, evidence.artifactId)} target="_blank" rel="noreferrer">Open {evidence.type} evidence</a>}</div>)}
@@ -83,16 +90,37 @@ function Coverage({ audit }: { audit: Audit }) {
   </details>;
 }
 
-export function ReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: () => void }) {
+function AuditReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: () => void }) {
   const [profileFilter, setProfileFilter] = useState<'all' | ProfileId>('all');
   const [selectedId, setSelectedId] = useState<string>();
   const [category, setCategory] = useState<FindingDisposition>('confirmed');
+  const [review, setReview] = useState(() => loadReviewMarks(audit.id));
+  const [lastChange, setLastChange] = useState<{ id: string; previous: ReviewStatus; status: ReviewStatus }>();
+  useEffect(() => {
+    const sync = (event: StorageEvent) => {
+      if (event.key === reviewKey(audit.id) || event.key === null) { setReview(loadReviewMarks(audit.id)); setLastChange(undefined); }
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, [audit.id]);
+  const mark = (id: string, status: ReviewStatus, undo = false) => {
+    const loaded = loadReviewMarks(audit.id);
+    const current = loaded.warning || review.warning ? review.marks : loaded.marks;
+    const previous = current[id] ?? 'open';
+    const marks = updateReviewMark(current, id, status);
+    let warning = '';
+    try { localStorage.setItem(reviewKey(audit.id), JSON.stringify(marks)); }
+    catch { warning = 'This change is temporary. Browser storage is unavailable. Download JSON to keep your review marks.'; }
+    setReview({ marks, warning });
+    setSelectedId(id);
+    setLastChange(undo ? undefined : { id, previous, status });
+  };
   const report = audit.report;
   if (!report) return <main className="error-main"><h1>There is no report to show yet.</h1><p>{audit.error || `Audit status: ${audit.status}.`}</p><button className="quiet-button" onClick={onNewAudit}>New audit</button></main>;
   const all = [...report.findings].sort((a, b) => priority[a.severity] - priority[b.severity]);
   const visible = all.filter(f => profileFilter === 'all' || f.profileIds.includes(profileFilter));
   const categoryNames: Record<FindingDisposition, string> = { confirmed: 'Confirmed', review: 'To verify', suggestion: 'Suggestions', unverified: 'Unverified' };
-  const listed = visible.filter(f => findingDisposition(f) === category);
+  const listed = visible.filter(f => findingDisposition(f) === category).sort((a, b) => reviewRank[review.marks[a.id] ?? 'open'] - reviewRank[review.marks[b.id] ?? 'open']);
   const selected = listed.find(f => f.id === selectedId) ?? listed[0];
   const selectFinding = (finding: Finding) => {
     setSelectedId(finding.id);
@@ -103,12 +131,14 @@ export function ReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: ()
   const confirmedTotal = all.filter(f => findingDisposition(f) === 'confirmed').length;
   return <main className="report-main report-calm">
     <header className="report-heading"><div><p className="report-context">{audit.demo ? 'Sample audit' : 'Website audit'} · {humanDate(audit.updatedAt)}</p><h1>Accessibility report</h1><p className="report-site">{audit.request.url}</p></div>
-      <div className="report-actions"><button className="quiet-button" onClick={onNewAudit}>New audit</button><button className="quiet-button" onClick={() => downloadFile(`blindspot-${audit.id}.json`, JSON.stringify(audit, null, 2), 'application/json')}>JSON</button><button className="quiet-button" onClick={() => downloadFile(`blindspot-${audit.id}.md`, buildMarkdown(audit, window.location.origin), 'text/markdown')}>Markdown</button></div>
+      <div className="report-actions"><button className="quiet-button" onClick={onNewAudit}>New audit</button><button className="quiet-button" onClick={() => downloadFile(`blindspot-${audit.id}.json`, JSON.stringify({ ...audit, manualReview: { scope: 'this browser', marks: review.marks } }, null, 2), 'application/json')}>JSON</button><button className="quiet-button" onClick={() => downloadFile(`blindspot-${audit.id}.md`, buildMarkdown(audit, window.location.origin) + '\n\n## Manual review\n\nSaved in this browser. Resolved does not mean retested.\n\n' + report.findings.map(f => `- ${findingCopy(f).title}, ${review.marks[f.id] ?? 'open'}`).join('\n'), 'text/markdown')}>Markdown</button></div>
     </header>
     <div className="report-command-bar">
       <div className="result-switcher" role="group" aria-label="Result categories">{(Object.keys(categoryNames) as FindingDisposition[]).map(kind => <button key={kind} type="button" aria-pressed={category === kind} onClick={() => setCategory(kind)}><span className={`issue-dot issue-dot-${kind === 'confirmed' ? 'urgent' : kind}`} aria-hidden="true" />{categoryNames[kind]}<span className="category-count">{visible.filter(f => findingDisposition(f) === kind).length}</span></button>)}</div>
       <span className="run-outcome">{report.scenarioOutcome === 'completed' ? 'Scenario completed' : report.scenarioOutcome === 'blocked' ? 'Scenario blocked' : 'Partial audit'}</span>
     </div>
+    <div className="review-feedback" role="status">{lastChange && <><span>{lastChange.status === 'open' ? 'Finding reopened.' : lastChange.status === 'seen' ? 'Finding marked as seen.' : 'Finding marked as resolved.'}</span><button type="button" className="quiet-button" onClick={() => mark(lastChange.id, lastChange.previous, true)}>Undo</button></>}</div>
+    {review.warning && <p className="review-warning" role="alert">{review.warning}</p>}
     <div className="issue-workspace">
       <section className="issue-sidebar" aria-label="Findings">
         <div className="issue-sidebar-tools">
@@ -119,15 +149,16 @@ export function ReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: ()
         <div className="issue-list">{listed.map(finding => {
           const kind = findingDisposition(finding);
           const tone = kind === 'confirmed' && ['critical', 'serious'].includes(finding.severity) ? 'urgent' : kind;
-          return <button key={finding.id} type="button" className="issue-list-row" aria-pressed={selected?.id === finding.id} aria-controls="issue-detail" onClick={() => selectFinding(finding)}>
+          const reviewStatus = review.marks[finding.id] ?? 'open';
+          return <button key={finding.id} type="button" className="issue-list-row" data-review={reviewStatus} aria-pressed={selected?.id === finding.id} aria-controls="issue-detail" onClick={() => selectFinding(finding)}>
             <span className={`issue-dot issue-dot-${tone}`} aria-hidden="true" />
-            <span><strong>{findingCopy(finding).title}</strong><small>{finding.selector || audit.pageStates.find(p => p.id === finding.pageStateId)?.title || 'Captured page'}</small></span>
+            <span><strong>{findingCopy(finding).title}</strong><small>{finding.selector || audit.pageStates.find(p => p.id === finding.pageStateId)?.title || 'Captured page'}{reviewStatus !== 'open' ? ` · ${reviewStatus === 'seen' ? 'Seen' : 'Resolved'}` : ''}</small></span>
           </button>;
         })}</div>
         {!listed.length && <p className="report-empty">No results in this category for the selected profile.</p>}
       </section>
       <section id="issue-detail" className="issue-detail-panel" tabIndex={-1} aria-label="Selected finding">
-        {selected ? <FindingDetail key={selected.id} audit={audit} finding={selected} /> : <div className="issue-no-selection"><h2>No finding to display</h2><p>Choose another category or profile. An empty list does not mean the site is fully accessible.</p></div>}
+        {selected ? <FindingDetail key={selected.id} audit={audit} finding={selected} reviewStatus={review.marks[selected.id] ?? 'open'} onReview={status => mark(selected.id, status)} /> : <div className="issue-no-selection"><h2>No finding to display</h2><p>Choose another category or profile. An empty list does not mean the site is fully accessible.</p></div>}
       </section>
     </div>
     <details className="report-secondary"><summary>About this audit <span>{confirmedTotal} confirmed barriers</span></summary><div className="report-secondary-body"><p>{audit.request.scenario}</p><p>{report.summary}</p><p>Scenario completion does not establish accessibility. Only captured states were inspected.</p></div></details>
@@ -135,4 +166,8 @@ export function ReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: ()
     <RunTrace audit={audit} />
     <p className="report-footnote">Automated checks do not certify accessibility. Test important journeys with people who use assistive technology.</p>
   </main>;
+}
+
+export function ReportView(props: { audit: Audit; onNewAudit: () => void }) {
+  return <AuditReportView key={props.audit.id} {...props} />;
 }
