@@ -8,6 +8,7 @@ import { assertSafeUrl, UnsafeUrlError } from './security.js';
 import { startNetworkProxy } from './network-proxy.js';
 import { ScreenReaderDriver } from './screen-reader.js';
 import { inPage } from './page-script.js';
+import { AccessBlockedError, detectAccessBlock } from './challenge.js';
 
 export interface BrowserLimits {
   maxActions: number;
@@ -36,6 +37,7 @@ export interface SessionOptions extends BrowserLimits {
 export type BrowserOptions = SessionOptions & { startUrl: string; fixtureTarget?: string };
 
 export interface PageSnapshot {
+  blockedReason?: string;
   state: PageState;
   dom: string;
   accessibility: string;
@@ -163,6 +165,8 @@ export class BrowserHost {
     });
     await context.addInitScript(GUARD_SCRIPT);
     const page = await context.newPage();
+    page.setDefaultTimeout(10_000);
+    page.setDefaultNavigationTimeout(options.timeoutMs);
     // axe creates a trusted, opener-less page to aggregate frame results.
     // Only website-created popups belong to this event; context 'page' is broader.
     page.on('popup', (popup) => { options.emit({ type: 'warning', journey: options.mode, message: 'A popup was blocked during the audit.' }); void popup.close().catch(() => undefined); });
@@ -209,6 +213,7 @@ export class BrowserSession {
   readonly screenReader?: ScreenReaderDriver;
   private actions = 0;
   private ownsHost = false;
+  private documentResponse?: { mitigated?: string; status: number };
   private cdp?: CDPSession;
   private history: Array<(page: Page) => Promise<unknown>> = [];
   private lastDialogCount = 0;
@@ -216,6 +221,11 @@ export class BrowserSession {
 
   constructor(private readonly host: BrowserHost, readonly context: BrowserContext, readonly page: Page, private readonly options: SessionOptions) {
     this.mode = options.mode;
+    page.on('response', response => {
+      if (response.request().isNavigationRequest() && response.frame() === page.mainFrame()) {
+        this.documentResponse = { status: response.status(), mitigated: response.headers()['cf-mitigated'] };
+      }
+    });
     if (options.mode === 'screen-reader') this.screenReader = new ScreenReaderDriver(page);
     options.signal.addEventListener('abort', this.abortHandler, { once: true });
   }
@@ -510,6 +520,7 @@ export class BrowserSession {
     const title = await this.page.title().catch(() => '');
     const bodyText = (await this.page.locator('body').innerText({ timeout: 3_000 }).catch(() => '')).slice(0, 20_000);
     const dom = await this.page.locator('html').evaluate((node) => node.outerHTML.slice(0, 250_000)).catch(() => '');
+    const blockedReason = detectAccessBlock({ ...this.documentResponse, title, text: bodyText, html: dom });
     const accessibility = await this.page.locator('body').ariaSnapshot().catch(async () => bodyText.slice(0, 20_000));
     const controls = await this.page.locator('button, a, input, textarea, select, [role]').evaluateAll((nodes) => nodes.slice(0, 400).map((node) => ({
       tag: node.tagName.toLowerCase(), role: node.getAttribute('role') ?? undefined,
@@ -521,8 +532,8 @@ export class BrowserSession {
     const signals = await collectDomSignals(this.page).catch(() => undefined);
     let axeRaw: Awaited<ReturnType<AxeBuilder['analyze']>>;
     let axeError: string | undefined;
-    try { axeRaw = await new AxeBuilder({ page: this.page }).analyze(); }
-    catch { axeRaw = { violations: [], passes: [], incomplete: [], inapplicable: [] } as unknown as typeof axeRaw; axeError = 'axe could not inspect this state.'; this.emit({ type: 'warning', message: axeError }); }
+    try { if (blockedReason) throw new AccessBlockedError(blockedReason); axeRaw = await new AxeBuilder({ page: this.page }).analyze(); }
+    catch { axeRaw = { violations: [], passes: [], incomplete: [], inapplicable: [] } as unknown as typeof axeRaw; axeError = blockedReason ?? 'axe could not inspect this state.'; this.emit({ type: 'warning', message: axeError }); }
     const axe: AxeResult = {
       violations: axeRaw.violations.map((item) => ({ id: item.id, tags: item.tags, impact: item.impact, help: item.help, description: item.description, helpUrl: item.helpUrl, nodes: item.nodes.map((node) => ({ html: node.html, target: node.target.map(String), failureSummary: node.failureSummary, any: node.any?.map(entry => ({ id: entry.id, data: entry.data, message: entry.message })) })) })),
       passes: axeRaw.passes.length, incomplete: axeRaw.incomplete.length, inapplicable: axeRaw.inapplicable.length, error: axeError,
@@ -537,17 +548,21 @@ export class BrowserSession {
     const accessibilityArtifact = await this.options.store.put(this.options.auditId, `${prefix}.aria.txt`, accessibility, 'text/plain; charset=utf-8');
     let speech: string[] | undefined;
     let speechArtifactId: string | undefined;
-    if (this.screenReader) {
+    if (this.screenReader && !blockedReason) {
       try {
         speech = await this.screenReader.readAll();
         speechArtifactId = (await this.options.store.put(this.options.auditId, `${prefix}.speech.txt`, speech.join('\n'), 'text/plain; charset=utf-8')).id;
       } catch { this.emit({ type: 'warning', message: 'The screen reader could not read this state top to bottom.' }); }
     }
     const state: PageState = { id: randomUUID(), url, title, capturedAt: new Date().toISOString(), journey: this.mode, screenshotArtifactId: screenshotArtifact?.id, previewArtifactId: previewArtifact?.id, domArtifactId: domArtifact.id, accessibilityArtifactId: accessibilityArtifact.id, speechArtifactId, description };
-    const result: PageSnapshot = { state, dom, accessibility, bodyText, controls, axe, signals, speech };
+    const result: PageSnapshot = { state, dom, accessibility, bodyText, controls, axe, signals, speech, blockedReason };
     this.snapshots.push(result);
     this.lastDialogCount = await this.dialogCount();
     this.emit({ type: 'tool', message: `Captured page state: ${description}`, pageStateId: state.id });
+    if (blockedReason) {
+      await this.options.onCapture?.(this.page, result);
+      throw new AccessBlockedError(blockedReason);
+    }
     let probe: BrowserContext | undefined;
     let probePage: Page | undefined;
     try {

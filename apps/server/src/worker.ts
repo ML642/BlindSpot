@@ -6,6 +6,7 @@ import { runLiveChecks, combinePlaybookResults, type LiveResult } from './playbo
 import { runJourney, JOURNEY_LABELS } from './journey.js';
 import { runSpecialists } from './specialists.js';
 import { isFixtureUrl } from './security.js';
+import { AccessBlockedError } from './challenge.js';
 
 export interface AuditJob { id: string; request: AuditRequest; geminiApiKey?: string; geminiModel: string; fixtureTarget?: string; limits: BrowserLimits; maxSpecialists?: number; }
 export interface WorkerResult { status: AuditStatus; pageStates: PageState[]; report?: AuditReport; error?: string; }
@@ -29,6 +30,7 @@ export async function runAuditJob(job: AuditJob, dependencies: WorkerDependencie
   const report = (summary: string, outcome: AuditReport['scenarioOutcome']): AuditReport => ({ summary, scenarioOutcome: outcome, ...combinePlaybookResults(results, job.request.profileIds, limitations), journeys: [...journeys] });
   const pageStates = () => captured.map(snapshot => snapshot.state);
   let host: BrowserHost | undefined;
+  let accessBlock: AccessBlockedError | undefined;
   try {
     const modes = journeyModes(job.request.profileIds);
     emit({ type: 'status', message: `Opening Chromium for ${modes.length} journey${modes.length === 1 ? '' : 's'}: ${modes.map(mode => JOURNEY_LABELS[mode]).join(', ')}.` });
@@ -43,6 +45,12 @@ export async function runAuditJob(job: AuditJob, dependencies: WorkerDependencie
           mode, renderings: renderingsFor(profileIds), store, auditId: job.id, signal, emit, ...job.limits,
           onCapture: async (page, snapshot, probePage) => {
             captured.push(snapshot);
+            if (snapshot.blockedReason) {
+              limitations.push(snapshot.blockedReason);
+              results.push({ findings: [], profiles: job.request.profileIds.map(profileId => ({ profileId, status: 'blocked', summary: snapshot.blockedReason!, checks: [{ id: 'site-access-blocked', title: 'Access to the requested page', status: 'blocked', method: 'tool', evidenceIds: [], notes: snapshot.blockedReason! }] })) });
+              await checkpoint();
+              return;
+            }
             try {
               results.push(await runLiveChecks(page, snapshot, profileIds, probePage, async (probes) => {
                 if (mode !== 'keyboard' || !probes.keyboard.trace.length) return;
@@ -59,6 +67,11 @@ export async function runAuditJob(job: AuditJob, dependencies: WorkerDependencie
         });
         journeys.push(await runJourney(session, { mode, profileIds, apiKey: job.geminiApiKey, model: job.geminiModel, scenario: job.request.scenario, startUrl: job.request.url, emit, signal, allowHeuristic: isFixtureUrl(job.request.url, job.fixtureTarget) }));
       } catch (error) {
+        if (error instanceof AccessBlockedError) {
+          accessBlock ??= error;
+          await host?.close();
+          return;
+        }
         if (error instanceof AuditCancelledError || signal.aborted) throw error;
         const message = error instanceof Error ? error.message : String(error);
         journeys.push({ mode, profileIds, outcome: 'blocked', summary: `${JOURNEY_LABELS[mode]} journey could not run: ${message}`, usedGemini: false, steps: [] });
@@ -69,6 +82,7 @@ export async function runAuditJob(job: AuditJob, dependencies: WorkerDependencie
       await checkpoint();
     };
     await Promise.all(modes.map(runMode));
+    if (accessBlock) throw accessBlock;
     if (signal.aborted) throw new AuditCancelledError();
     emit({ type: 'status', message: 'Specialists are reviewing the captured journeys.' });
     const specialists = await runSpecialists({ apiKey: job.geminiApiKey, model: job.geminiModel, scenario: job.request.scenario, profileIds: job.request.profileIds, snapshots: captured, journeys, toolFindings: results.flatMap(result => result.findings), store, auditId: job.id, signal, emit, maxSpecialists: job.maxSpecialists });
@@ -80,6 +94,10 @@ export async function runAuditJob(job: AuditJob, dependencies: WorkerDependencie
 
     return { status: outcome === 'completed' && !incomplete ? 'completed' : 'partial', pageStates: pageStates(), report: report(summary, outcome) };
   } catch (error) {
+    if (error instanceof AccessBlockedError) {
+      emit({ type: 'warning', message: error.message });
+      return { status: 'partial', pageStates: captured.map(s => s.state), report: report(error.message, 'blocked'), error: error.message };
+    }
     const cancelled = signal.aborted || error instanceof AuditCancelledError;
     const message = cancelled ? 'Audit stopped; captured evidence is preserved.' : 'The browser audit stopped before completion. Captured evidence is preserved.';
     emit({ type: 'warning', message });

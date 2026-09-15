@@ -24,7 +24,7 @@ function signalEvidence(context: CheckerContext, type: Evidence['type'], descrip
 
 function finding(
   context: CheckerContext,
-  input: Pick<Finding, 'title' | 'description' | 'impact' | 'severity' | 'recommendation' | 'wcag' | 'profileIds'> & Partial<Pick<Finding, 'selector' | 'reproduction' | 'method' | 'status'>>,
+  input: Pick<Finding, 'title' | 'description' | 'impact' | 'severity' | 'recommendation' | 'wcag' | 'profileIds'> & Partial<Pick<Finding, 'selector' | 'reproduction' | 'method' | 'status' | 'disposition'>>,
   evidence: Evidence[],
 ): Finding {
   const selector = input.selector ?? evidence.find(e => e.selector)?.selector;
@@ -43,6 +43,7 @@ function finding(
     wcag: input.wcag,
     method: input.method ?? 'tool',
     status: input.status ?? 'fail',
+    disposition: input.disposition,
   };
 }
 
@@ -412,6 +413,7 @@ function addAxeFindings(context: CheckerContext, results: AxeResultsLike | undef
       recommendation: `Resolve the ${rule.id} issue using the axe guidance and verify the recorded scenario again.`,
       wcag: axeWcag(rule.id, rule.tags),
       status: rule.tags?.includes('best-practice') || rule.id === 'heading-order' || rule.id === 'tabindex' ? 'needs_review' : 'fail',
+      disposition: rule.tags?.includes('best-practice') || rule.id === 'heading-order' || rule.id === 'tabindex' ? 'suggestion' : undefined,
       selector: nodeEvidence[0]?.selector,
       reproduction: ['Run the recorded scenario and inspect every element identified by the automated rule.'],
     }, nodeEvidence));
@@ -427,7 +429,8 @@ export async function runAutomatedChecks(context: CheckerContext, requestedProfi
   const signals = context.signals ?? await collectDomSignals(context.page);
   const probes = context.skipInteractionProbes ? { keyboard: { attempted: false, repeatedFocus: false, focusSequence: [], trace: [], focusableCount: 0, withoutIndicator: [] }, reflow: { attempted: false, horizontalOverflow: undefined }, textResize: { attempted: false, overflowCount: undefined }, textSpacing: { attempted: false, overflowCount: undefined }, reducedMotion: { attempted: false, animatedAfterPreference: undefined }, evidence: [] } satisfies InteractionProbeReport : await runInteractionProbes({ ...context, page: context.probePage ?? context.page });
   await context.onProbes?.(probes);
-  const axe = addAxeFindings(context, await axeResults(context), selectedIds);
+  const axeOutput = await axeResults(context);
+  const axe = addAxeFindings(context, axeOutput, selectedIds);
   const findings: Finding[] = [...axe.findings];
   const evidence: Evidence[] = [...axe.evidence, ...probes.evidence];
   const checksByProfile = new Map<ProfileId, PlaybookResult['checks']>();
@@ -454,6 +457,16 @@ export async function runAutomatedChecks(context: CheckerContext, requestedProfi
   }
 
   // Structure and names (screen reader).
+  for (const rule of axeOutput?.passes ?? []) {
+    const applicableProfiles = axeProfiles(rule.id).filter(profileId => selectedIds.has(profileId));
+    if (!applicableProfiles.length) continue;
+    const passEvidence = signalEvidence(context, 'axe', `${rule.help}: axe reported this rule passed for the captured page state.`, undefined, rule.helpUrl);
+    evidence.push(passEvidence);
+    for (const profileId of applicableProfiles) {
+      checksByProfile.get(profileId)!.push(check(`axe-pass-${rule.id}`, rule.help, 'pass', 'tool', [passEvidence], 'axe found no violations for this rule in the captured page state.'));
+    }
+  }
+
   if (signals.imagesWithoutAlt.length) {
     const items = signals.imagesWithoutAlt.slice(0, 25).map(signal => signalEvidence(context, 'dom', 'Visible image has no alt attribute.', signal));
     add(pick('blindness'), finding(context, { title: `${signals.imagesWithoutAlt.length} image(s) are missing alternative text`, description: `${signals.imagesWithoutAlt.length} visible image(s) have no alt attribute, so their purpose is unavailable to screen-reader users. Each is listed in the evidence.`, impact: 'The image is announced as its filename or skipped without conveying its purpose.', severity: 'serious', profileIds: pick('blindness'), recommendation: 'Add concise alt text when the image conveys information, or use alt="" for decorative images.', wcag: [WCAG.nonText] }, items), 'image-alt', 'Alternative text', items);

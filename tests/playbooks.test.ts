@@ -34,11 +34,13 @@ test('real checker distinguishes broken/corrected names and heuristic review fro
     const run = async (name: string) => {
       await page.setContent(await fs.readFile(new URL(`../fixtures/${name}.html`, import.meta.url), 'utf8'));
       const axe = await new AxeBuilder({ page }).analyze();
-      return runAutomatedChecks({ page, pageState: { id: name, url: 'about:blank', title: name, description: name, journey: 'pointer', capturedAt: new Date().toISOString() }, axeResults: { violations: axe.violations.map(r => ({ ...r, nodes: r.nodes.map(n => ({ ...n, target: n.target.map(String) })) })) } });
+      return runAutomatedChecks({ page, pageState: { id: name, url: 'about:blank', title: name, description: name, journey: 'pointer', capturedAt: new Date().toISOString() }, axeResults: { violations: axe.violations.map(r => ({ ...r, nodes: r.nodes.map(n => ({ ...n, target: n.target.map(String) })) })), passes: axe.passes.map(r => ({ ...r, nodes: r.nodes.map(n => ({ ...n, target: n.target.map(String) })) })) } });
     };
     const broken = await run('broken'); const fixed = await run('fixed');
     assert.ok(broken.findings.some(f => f.selector === '.tiny' && f.wcag.some(ref => ref.id === '4.1.2') && f.status === 'fail'));
     assert.ok(!fixed.findings.some(f => f.wcag.some(ref => ref.id === '4.1.2') && f.status === 'fail'));
+    assert.ok(fixed.profiles.some(profile => profile.checks.some(check => check.status === 'pass')));
+    assert.ok(fixed.profiles.some(profile => profile.checks.some(check => check.id === 'axe-pass-button-name' && check.status === 'pass')), 'Passed axe rules remain visible after journey integration');
     assert.ok(broken.findings.some(f => /target|motion|heading/i.test(f.title) && f.status === 'needs_review'));
     assert.ok(broken.evidence.some(e => e.description.includes('320px')));
     assert.ok(broken.findings.some(f => /Animated content needs motion review/.test(f.title) && f.profileIds.includes('motion')), 'the running 2s ticker must be inventoried as a running animation');

@@ -1,15 +1,73 @@
-import { useEffect, useMemo, useState } from 'react';
-import { profiles, type Audit, type Finding, type InteractionMode, type ProfileId, type Severity } from '@blindspot/shared';
+import { useEffect, useState } from 'react';
+import { profiles, findingCopy, findingDisposition, type Audit, type Finding, type FindingDisposition, type ProfileId, type InteractionMode } from '@blindspot/shared';
 import { artifactUrl } from '../lib/api';
-import { buildMarkdown, downloadFile, formatStatus, humanDate, statusClass } from '../lib/format';
+import { buildMarkdown, downloadFile, formatStatus, humanDate, findingLocation } from '../lib/format';
+import { FindingLocation } from './FindingLocation';
 import { Icon } from './Icon';
+import { RunTrace } from './RunTrace';
+import { loadReviewMarks, reviewKey, reviewRank, updateReviewMark, type ReviewStatus } from '../lib/review-state';
+import '../report.css';
 
-function Metric({ value, label, tone = '' }: { value: string | number; label: string; tone?: string }) {
-  return <div className={`metric ${tone}`}><strong>{value}</strong><span>{label}</span></div>;
+const priority = { critical: 0, serious: 1, moderate: 2, minor: 3 };
+const labels: Record<FindingDisposition, string> = { confirmed: 'Confirmed by a tool', review: 'Check manually', suggestion: 'Good practice', unverified: 'Unverified observation' };
+
+type ReviewCheck = NonNullable<Audit['report']>['profiles'][number]['checks'][number];
+
+function countChecks(checks: readonly ReviewCheck[]) {
+  return {
+    pass: checks.filter(check => check.status === 'pass').length,
+    needsReview: checks.filter(check => check.status === 'needs_review').length,
+    omitted: checks.filter(check => check.status === 'not_applicable').length,
+    blocked: checks.filter(check => check.status === 'blocked').length,
+    fail: checks.filter(check => check.status === 'fail').length,
+  };
 }
 
-function FindingCard({ finding, selected, onSelect }: { finding: Finding; selected: boolean; onSelect: () => void }) {
-  return <button type="button" className={`finding-card ${selected ? 'is-selected' : ''}`} onClick={onSelect} aria-pressed={selected}><span className={`severity-mark severity-${finding.severity}`} aria-hidden="true" /><span className="finding-card-copy"><span className="finding-card-top"><span className={statusClass(finding.status)}>{formatStatus(finding.status)}</span><span>{finding.method === 'tool' ? 'Tool check' : 'Agent review'}</span></span><strong>{finding.title}</strong><span className="finding-card-meta">{finding.wcag[0]?.id || 'Review'} <span>·</span> {finding.profileIds.length} profile{finding.profileIds.length === 1 ? '' : 's'}</span></span><Icon name="chevron" size={17} /></button>;
+function CheckCounts({ checks, compact = false }: { checks: readonly ReviewCheck[]; compact?: boolean }) {
+  const counts = countChecks(checks);
+  const label = `${counts.pass} passed, ${counts.needsReview} need review, ${counts.omitted} omitted, ${counts.blocked} blocked, ${counts.fail} failed`;
+  return <span className={`check-counts ${compact ? 'check-counts-compact' : ''}`} aria-label={label}><span className="count-pass" aria-hidden="true"><span>{String.fromCodePoint(0x2713)}</span>{counts.pass} passed</span><span className="count-review" aria-hidden="true">{counts.needsReview} review</span><span className="count-omitted" aria-hidden="true">{counts.omitted} omitted</span><span className="count-blocked" aria-hidden="true">{counts.blocked} blocked</span><span className="count-fail" aria-hidden="true">{counts.fail} failed</span></span>;
+}
+
+function detectionMethod(finding: Finding) {
+  if (finding.method === 'gemini') return 'Gemini';
+  return finding.evidence.some(evidence => evidence.type === 'axe') ? 'axe-core' : 'BlindSpot browser checks';
+}
+
+function FindingDetail({ audit, finding, reviewStatus, onReview }: { audit: Audit; finding: Finding; reviewStatus: ReviewStatus; onReview: (status: ReviewStatus) => void }) {
+  const location = findingLocation(audit, finding);
+  const disposition = findingDisposition(finding);
+  const copy = findingCopy(finding);
+  const foundBy = finding.profileIds.map(id => profiles.find(profile => profile.id === id)?.name ?? id).join(', ');
+  return <article className="selected-issue" aria-labelledby="selected-issue-title">
+    <header className="selected-issue-header">
+      <div className="selected-issue-title">
+        <span className={`report-label report-label-${disposition}`}>{labels[disposition]}{disposition === 'confirmed' ? ` · ${finding.severity}` : ''}</span>
+        <h2 id="selected-issue-title">{copy.title}</h2>
+        <p className="issue-meta">{foundBy && <span>Found by <strong>{foundBy}</strong></span>}<span>{detectionMethod(finding)}</span><span>{location.page?.title || 'Captured page'}</span></p>
+      </div>
+      <div className="finding-review-actions" role="group" aria-label="Review status">
+        {reviewStatus === 'open' && <button type="button" className="quiet-button" onClick={() => onReview('seen')}>Mark as seen</button>}
+        {reviewStatus !== 'resolved' && <button type="button" className="quiet-button" onClick={() => onReview('resolved')}>Mark as resolved</button>}
+        {reviewStatus !== 'open' && <button type="button" className="quiet-button" onClick={() => onReview('open')}>Reopen</button>}
+      </div>
+    </header>
+    <div className="report-item-body">
+      <div className="finding-guidance">
+        {finding.observation && <section className="finding-observation"><h3>What we observed</h3><p>{finding.observation}</p></section>}
+        <section className="finding-fix"><h3>How to fix it</h3><p>{copy.recommendation}</p></section>
+      </div>
+      <FindingLocation audit={audit} finding={finding} />
+      <details className="report-technical"><summary>Technical details</summary>
+        <div className="technical-links">
+          {finding.wcag.map(ref => <a href={ref.url} target="_blank" rel="noreferrer" key={ref.id}>{ref.id} {ref.title}</a>)}
+          {location.page?.domArtifactId && <a href={artifactUrl(audit.id, location.page.domArtifactId)} target="_blank" rel="noreferrer">Rendered HTML</a>}
+          {location.page?.accessibilityArtifactId && <a href={artifactUrl(audit.id, location.page.accessibilityArtifactId)} target="_blank" rel="noreferrer">Accessibility tree</a>}
+          <button type="button" className="quiet-button" onClick={() => downloadFile(`blindspot-finding-${finding.id}.json`, JSON.stringify(finding, null, 2), 'application/json')}>Raw finding JSON</button>
+        </div>
+      </details>
+    </div>
+  </article>;
 }
 
 const journeyLabels: Record<InteractionMode, string> = { 'screen-reader': 'Screen reader', keyboard: 'Keyboard only', pointer: 'Sighted pointer' };
@@ -21,43 +79,141 @@ function Journeys({ audit }: { audit: Audit }) {
 }
 
 function Coverage({ audit }: { audit: Audit }) {
-  const report = audit.report;
-  if (!report) return null;
-  return <section className="coverage-panel" aria-labelledby="coverage-title"><div className="coverage-panel-head"><div><h2 id="coverage-title">Profile coverage</h2></div><span>{report.profiles.length} playbooks run</span></div><div className="coverage-grid">{report.profiles.map((profile) => { const profileName = profiles.find((item) => item.id === profile.profileId)?.name ?? profile.profileId; return <details className="coverage-profile" key={profile.profileId}><summary><span className={`coverage-state state-${profile.status.replace('_', '-')}`}><span />{formatStatus(profile.status)}</span><strong>{profileName}</strong><span className="coverage-check-count">{profile.checks.filter((check) => check.status === 'fail').length} failed · {profile.checks.length} checks</span><Icon name="chevron" size={14} /></summary><div className="coverage-checks">{profile.checks.map((check) => <div className="coverage-check" key={check.id}><span className={`check-indicator check-${check.status.replace('_', '-')}`}>{check.status === 'pass' ? '✓' : check.status === 'fail' ? '!' : '·'}</span><span><strong>{check.title}</strong><small>{check.notes || 'No additional notes.'}</small></span><span className="check-method">{formatStatus(check.status)} · {check.method}</span></div>)}</div></details>; })}</div></section>;
+  const report = audit.report!;
+  const allChecks = [...new Map(report.profiles.flatMap(profile => profile.checks).map(check => [`${check.method}|${check.id}|${check.status}|${check.title}|${check.notes}`, check])).values()];
+  return <details className="report-secondary"><summary>Scope, checks and limitations <span>{allChecks.length} checks</span></summary>
+    <div className="report-secondary-body">
+      <p>{report.summary}</p><p>{audit.pageStates.length} captured states / {report.profiles.length} profiles assessed. A profile without findings is not a guarantee of accessibility.</p>
+      <div className="review-totals"><strong>Accessibility checks</strong><CheckCounts checks={allChecks} /></div>
+      <div className="coverage-grid">{report.profiles.map(profile => {
+        const profileName = profiles.find(item => item.id === profile.profileId)?.name ?? profile.profileId;
+        return <details className="coverage-profile" key={profile.profileId}>
+          <summary>
+            <span className={`coverage-state state-${profile.status.replace('_', '-')}`}>{profile.status === 'pass' ? <span aria-hidden="true">{String.fromCodePoint(0x2713)}</span> : <span />}{formatStatus(profile.status)}</span>
+            <strong>{profileName}</strong>
+            <CheckCounts checks={profile.checks} compact />
+          </summary>
+          <div className="coverage-checks">{profile.checks.map((check, index) => <div className="coverage-check" key={`${check.id}-${index}`}>
+            <span className={`check-indicator check-${check.status.replace('_', '-')}`} aria-label={formatStatus(check.status)}>{check.status === 'pass' ? String.fromCodePoint(0x2713) : check.status === 'fail' ? '!' : check.status === 'not_applicable' ? '-' : String.fromCodePoint(0x00b7)}</span>
+            <span><strong>{check.title}</strong><small>{check.notes || 'No additional notes.'}</small></span>
+            <span className="check-method">{check.status === 'blocked' ? 'Not checked' : check.status === 'needs_review' ? 'Manual verification needed' : formatStatus(check.status)} / {check.method}</span>
+          </div>)}</div>
+        </details>;
+      })}</div>
+      <h3>Limitations</h3><ul>{[...new Set(report.limitations)].map(item => <li key={item}>{item}</li>)}</ul>
+    </div>
+  </details>;
 }
 
-function ReportDetail({ audit, finding }: { audit: Audit; finding?: Finding }) {
-  if (!finding) return <div className="detail-empty"><span className="detail-number">↖</span><h3>Choose a finding to inspect it.</h3><p>Each result includes the affected profile, page state, evidence, and a practical next step.</p></div>;
-  const page = audit.pageStates.find((state) => state.id === finding.pageStateId);
-  return <article className="report-detail"><div className="detail-head"><div><span className={`severity-label severity-text-${finding.severity}`}>{finding.severity}</span><h2>{finding.title}</h2></div><span className={statusClass(finding.status)}>{formatStatus(finding.status)}</span></div><p className="detail-description">{finding.description}</p><div className="impact-box"><p>Why it matters</p><strong>{finding.impact}</strong></div><div className="detail-section"><h3>Profiles affected</h3><div className="profile-tags">{finding.profileIds.map((profileId) => <span key={profileId}>{profiles.find((profile) => profile.id === profileId)?.name ?? profileId}</span>)}</div></div><div className="detail-section"><h3>Evidence</h3><div className="evidence-list">{finding.evidence.map((evidence) => <div className="evidence-row" key={evidence.id}><span className="evidence-type">{evidence.type}</span><div><strong>{evidence.description}</strong>{evidence.selector && <code>{evidence.selector}</code>}{evidence.value && <span className="evidence-value">{evidence.value}</span>}</div>{evidence.artifactId && <a href={artifactUrl(audit.id, evidence.artifactId)} target="_blank" rel="noreferrer" aria-label={`Open ${evidence.type} evidence`}><Icon name="external" size={15} /></a>}</div>)}</div>{page && <p className="page-reference">Captured on <strong>{page.title || page.url}</strong> · {humanDate(page.capturedAt)}</p>}</div><div className="detail-section"><h3>Reproduce</h3><ol className="repro-list">{finding.reproduction.map((step, index) => <li key={`${step}-${index}`}>{step}</li>)}</ol></div><div className="recommendation"><span className="recommendation-label">Suggested next step</span><p>{finding.recommendation}</p></div><div className="wcag-links"><h3>Standards reference</h3>{finding.wcag.map((criterion) => <a href={criterion.url} target="_blank" rel="noreferrer" key={criterion.id}>{criterion.id} {criterion.title} <Icon name="external" size={13} /></a>)}</div></article>;
+function ProfileDropdown({ audit, value, onChange }: { audit: Audit; value: 'all' | ProfileId; onChange: (value: 'all' | ProfileId) => void }) {
+  const available = profiles.filter(profile => audit.request.profileIds.includes(profile.id));
+  const selectedName = value === 'all' ? 'All profiles' : available.find(profile => profile.id === value)?.name ?? 'All profiles';
+  const options: Array<{ id: 'all' | ProfileId; name: string }> = [{ id: 'all', name: 'All profiles' }, ...available];
+
+  const select = (next: 'all' | ProfileId, button: HTMLButtonElement) => {
+    onChange(next);
+    button.closest('details')?.removeAttribute('open');
+  };
+
+  return <div className="report-profile-filter">
+    <span className="profile-dropdown-label">Profile</span>
+    <details className="profile-dropdown">
+      <summary aria-label={`Profile: ${selectedName}`}><span>{selectedName}</span><Icon name="chevron" size={16} /></summary>
+      <div className="profile-dropdown-menu" role="listbox" aria-label="Profiles">
+        {options.map(option => <button type="button" role="option" aria-selected={value === option.id} key={option.id} onClick={event => select(option.id, event.currentTarget)}>
+          <span>{option.name}</span>{value === option.id && <Icon name="check" size={16} />}
+        </button>)}
+      </div>
+    </details>
+  </div>;
 }
 
-export function ReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: () => void }) {
-  const report = audit.report;
-  const [selectedFindingId, setSelectedFindingId] = useState<string | undefined>(report?.findings[0]?.id);
+function AuditReportView({ audit, onNewAudit }: { audit: Audit; onNewAudit: () => void }) {
   const [profileFilter, setProfileFilter] = useState<'all' | ProfileId>('all');
-  const [severityFilter, setSeverityFilter] = useState<'all' | Severity>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'fail' | 'needs_review'>('all');
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  const [showLimitations, setShowLimitations] = useState(false);
-  const findings = report?.findings ?? [];
-  const filteredFindings = useMemo(() => findings.filter((finding) => (profileFilter === 'all' || finding.profileIds.includes(profileFilter)) && (severityFilter === 'all' || finding.severity === severityFilter) && (statusFilter === 'all' || finding.status === statusFilter)), [findings, profileFilter, severityFilter, statusFilter]);
-  const selectedFinding = findings.find((finding) => finding.id === selectedFindingId);
-  const failCount = findings.filter((finding) => finding.status === 'fail').length;
-  const reviewCount = findings.filter((finding) => finding.status === 'needs_review').length;
-  const profilePassCount = report?.profiles.filter((profile) => profile.status === 'pass').length ?? 0;
-  const activeFilters = [profileFilter !== 'all', severityFilter !== 'all', statusFilter !== 'all'].filter(Boolean).length;
-
+  const [selectedId, setSelectedId] = useState<string>();
+  const [category, setCategory] = useState<FindingDisposition>('confirmed');
+  const [review, setReview] = useState(() => loadReviewMarks(audit.id));
+  const [lastChange, setLastChange] = useState<{ id: string; previous: ReviewStatus; status: ReviewStatus }>();
   useEffect(() => {
-    if (selectedFindingId && filteredFindings.some((finding) => finding.id === selectedFindingId)) return;
-    setSelectedFindingId(filteredFindings[0]?.id);
-  }, [filteredFindings, selectedFindingId]);
+    const sync = (event: StorageEvent) => {
+      if (event.key === reviewKey(audit.id) || event.key === null) { setReview(loadReviewMarks(audit.id)); setLastChange(undefined); }
+    };
+    window.addEventListener('storage', sync);
+    return () => window.removeEventListener('storage', sync);
+  }, [audit.id]);
+  const mark = (id: string, status: ReviewStatus, undo = false) => {
+    const loaded = loadReviewMarks(audit.id);
+    const current = loaded.warning || review.warning ? review.marks : loaded.marks;
+    const previous = current[id] ?? 'open';
+    const marks = updateReviewMark(current, id, status);
+    let warning = '';
+    try { localStorage.setItem(reviewKey(audit.id), JSON.stringify(marks)); }
+    catch { warning = 'This change is temporary. Browser storage is unavailable. Download JSON to keep your review marks.'; }
+    setReview({ marks, warning });
+    setSelectedId(id);
+    setLastChange(undo ? undefined : { id, previous, status });
+  };
+  const report = audit.report;
+  if (!report) return <main className="error-main"><h1>There is no report to show yet.</h1><p>{audit.error || `Audit status: ${audit.status}.`}</p><button className="quiet-button" onClick={onNewAudit}>New audit</button></main>;
+  const all = [...report.findings].sort((a, b) => priority[a.severity] - priority[b.severity]);
+  const visible = all.filter(f => profileFilter === 'all' || f.profileIds.includes(profileFilter));
+  const categoryNames: Record<FindingDisposition, string> = { confirmed: 'Confirmed', review: 'To verify', suggestion: 'Suggestions', unverified: 'Unverified' };
+  const categoryOrder: FindingDisposition[] = ['confirmed', 'review', 'suggestion', 'unverified'];
+  const chooseProfile = (value: 'all' | ProfileId) => {
+    setProfileFilter(value);
+    setSelectedId(undefined);
+    const matching = all.filter(finding => value === 'all' || finding.profileIds.includes(value));
+    const firstAvailable = categoryOrder.find(kind => matching.some(finding => findingDisposition(finding) === kind));
+    if (firstAvailable) setCategory(firstAvailable);
+  };
+  const listed = visible.filter(f => findingDisposition(f) === category).sort((a, b) => reviewRank[review.marks[a.id] ?? 'open'] - reviewRank[review.marks[b.id] ?? 'open']);
+  const selected = listed.find(f => f.id === selectedId) ?? listed[0];
+  const selectFinding = (finding: Finding) => {
+    setSelectedId(finding.id);
+    if (window.matchMedia('(max-width: 760px)').matches) {
+      requestAnimationFrame(() => document.getElementById('issue-detail')?.focus());
+    }
+  };
+  const confirmedTotal = all.filter(f => findingDisposition(f) === 'confirmed').length;
+  return <main className="report-main report-calm">
+    <header className="report-heading"><div><p className="report-context">{audit.demo ? 'Sample audit' : 'Website audit'} · {humanDate(audit.updatedAt)}</p><h1>Accessibility report</h1><p className="report-site">{audit.request.url}</p></div>
+      <div className="report-actions"><button className="quiet-button" onClick={onNewAudit}>New audit</button><div className="export-group" role="group" aria-label="Export"><button className="quiet-button" onClick={() => downloadFile(`blindspot-${audit.id}.json`, JSON.stringify({ ...audit, manualReview: { scope: 'this browser', marks: review.marks } }, null, 2), 'application/json')}>JSON</button><button className="quiet-button" onClick={() => downloadFile(`blindspot-${audit.id}.md`, buildMarkdown(audit, window.location.origin) + '\n\n## Manual review\n\nSaved in this browser. Resolved does not mean retested.\n\n' + report.findings.map(f => `- ${findingCopy(f).title}, ${review.marks[f.id] ?? 'open'}`).join('\n'), 'text/markdown')}>Markdown</button></div></div>
+    </header>
+    <div className="report-command-bar">
+      <div className="result-switcher" role="group" aria-label="Result categories">{(Object.keys(categoryNames) as FindingDisposition[]).map(kind => <button key={kind} type="button" aria-pressed={category === kind} onClick={() => setCategory(kind)}><span className={`issue-dot issue-dot-${kind === 'confirmed' ? 'urgent' : kind}`} aria-hidden="true" />{categoryNames[kind]}<span className="category-count">{visible.filter(f => findingDisposition(f) === kind).length}</span></button>)}</div>
+      <span className="run-outcome" data-outcome={report.scenarioOutcome}>{report.scenarioOutcome === 'completed' ? 'Scenario completed' : report.scenarioOutcome === 'blocked' ? 'Scenario blocked' : 'Partial audit'}</span>
+    </div>
+    <div className="review-feedback" role="status">{lastChange && <><span>{lastChange.status === 'open' ? 'Finding reopened.' : lastChange.status === 'seen' ? 'Finding marked as seen.' : 'Finding marked as resolved.'}</span><button type="button" className="quiet-button" onClick={() => mark(lastChange.id, lastChange.previous, true)}>Undo</button></>}</div>
+    {review.warning && <p className="review-warning" role="alert">{review.warning}</p>}
+    <div className="issue-workspace">
+      <section className="issue-sidebar" aria-label="Findings">
+        <div className="issue-sidebar-tools">
+          <ProfileDropdown audit={audit} value={profileFilter} onChange={chooseProfile} />
 
-  const clearFilters = () => { setProfileFilter('all'); setSeverityFilter('all'); setStatusFilter('all'); };
-  const exportJson = () => downloadFile(`blindspot-${audit.id}.json`, JSON.stringify(audit, null, 2), 'application/json');
-  const exportMarkdown = () => downloadFile(`blindspot-${audit.id}.md`, buildMarkdown(audit), 'text/markdown');
+        </div>
+        <p className="issue-list-caption">{categoryNames[category]} <span>{listed.length}</span></p>
+        <div className="issue-list">{listed.map(finding => {
+          const kind = findingDisposition(finding);
+          const tone = kind === 'confirmed' && ['critical', 'serious'].includes(finding.severity) ? 'urgent' : kind;
+          const reviewStatus = review.marks[finding.id] ?? 'open';
+          return <button key={finding.id} type="button" className="issue-list-row" data-review={reviewStatus} aria-pressed={selected?.id === finding.id} aria-controls="issue-detail" onClick={() => selectFinding(finding)}>
+            <span className={`issue-dot issue-dot-${tone}`} aria-hidden="true" />
+            <span><strong>{findingCopy(finding).title}</strong><small>{finding.selector || audit.pageStates.find(p => p.id === finding.pageStateId)?.title || 'Captured page'}{reviewStatus !== 'open' ? ` · ${reviewStatus === 'seen' ? 'Seen' : 'Resolved'}` : ''}</small></span>
+          </button>;
+        })}</div>
+        {!listed.length && <p className="report-empty">No results in this category for the selected profile.</p>}
+      </section>
+      <section id="issue-detail" className="issue-detail-panel" tabIndex={-1} aria-label="Selected finding">
+        {selected ? <FindingDetail key={selected.id} audit={audit} finding={selected} reviewStatus={review.marks[selected.id] ?? 'open'} onReview={status => mark(selected.id, status)} /> : <div className="issue-no-selection"><h2>No finding to display</h2><p>Choose another category or profile. An empty list does not mean the site is fully accessible.</p></div>}
+      </section>
+    </div>
+    <details className="report-secondary"><summary>About this audit <span>{confirmedTotal} confirmed barriers</span></summary><div className="report-secondary-body"><p>{audit.request.scenario}</p><p>{report.summary}</p><p>Scenario completion does not establish accessibility. Only captured states were inspected.</p></div></details>
+    <Coverage audit={audit} />
+    <RunTrace audit={audit} />
+    <p className="report-footnote">Automated checks do not certify accessibility. Test important journeys with people who use assistive technology.</p>
+  </main>;
+}
 
-  if (!report) return <main className="error-main"><div className="error-mark">!</div><h1>There is no report to show yet.</h1><p>The audit ended with status “{audit.status}”. {audit.error || 'Try the audit again from a new run.'}</p><button className="primary-button button-inline" type="button" onClick={onNewAudit}>Start a new audit <Icon name="arrow" size={18} /></button></main>;
-
-  return <main className="report-main"><div className="report-heading"><div><p className="panel-kicker">Audit report <span className="sample-flag">{audit.demo ? 'Sample' : 'Live'}</span></p><h1>Accessibility report</h1><p className="report-url"><Icon name="external" size={14} /> {audit.request.url} <span>·</span> {humanDate(audit.updatedAt)}</p></div><div className="report-actions"><button className="quiet-button" type="button" onClick={onNewAudit}>New audit</button><div className="export-menu"><button className="quiet-button" type="button" onClick={exportJson}><Icon name="download" size={15} /> JSON</button><button className="quiet-button" type="button" onClick={exportMarkdown}><Icon name="download" size={15} /> Markdown</button></div></div></div><section className="summary-band"><div className="summary-copy"><span className={`scenario-status scenario-${report.scenarioOutcome}`}><span /> Scenario {report.scenarioOutcome}</span><p>{report.summary}</p></div><div className="metrics"><Metric value={failCount} label="findings" tone="metric-alert" /><Metric value={reviewCount} label="needs review" /><Metric value={`${profilePassCount}/${report.profiles.length}`} label="profiles clear" tone="metric-blue" /></div></section><div className="limitations-toggle"><button className="text-button" type="button" onClick={() => setShowLimitations(!showLimitations)}>{showLimitations ? 'Hide limitations' : 'Read limitations'} <Icon name="chevron" size={14} /></button></div>{showLimitations && <div className="limitations-box"><strong>Review boundaries</strong>{report.limitations.map((limitation) => <span key={limitation}>{limitation}</span>)}</div>}<Journeys audit={audit} /><Coverage audit={audit} /><div className="report-layout"><section className="findings-column" aria-labelledby="findings-title"><div className="section-heading"><div><p className="panel-kicker">Prioritised review</p><h2 id="findings-title">Findings <span>{filteredFindings.length}</span></h2></div><button className={`filter-button ${filtersOpen || activeFilters ? 'is-active' : ''}`} type="button" onClick={() => setFiltersOpen(!filtersOpen)} aria-expanded={filtersOpen}><Icon name="filter" size={16} /> Filters {activeFilters > 0 && <b>{activeFilters}</b>}</button></div>{filtersOpen && <div className="filters-panel"><label>Profile<select value={profileFilter} onChange={(event) => setProfileFilter(event.target.value as 'all' | ProfileId)}><option value="all">All profiles</option>{profiles.map((profile) => <option value={profile.id} key={profile.id}>{profile.name}</option>)}</select></label><label>Severity<select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value as 'all' | Severity)}><option value="all">All severities</option><option value="critical">Critical</option><option value="serious">Serious</option><option value="moderate">Moderate</option><option value="minor">Minor</option></select></label><label>Status<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as 'all' | 'fail' | 'needs_review')}><option value="all">All statuses</option><option value="fail">Failed</option><option value="needs_review">Needs review</option></select></label>{activeFilters > 0 && <button className="clear-filter" type="button" onClick={clearFilters}>Clear</button>}</div>}<div className="finding-list">{filteredFindings.length ? filteredFindings.map((finding) => <FindingCard finding={finding} selected={finding.id === selectedFindingId} onSelect={() => setSelectedFindingId(finding.id)} key={finding.id} />) : <div className="empty-findings"><Icon name="check" size={22} /><h3>No findings match these filters.</h3><button className="text-button" type="button" onClick={clearFilters}>Clear filters</button></div>}</div></section><aside className="detail-column" aria-live="polite"><ReportDetail audit={audit} finding={selectedFinding} /></aside></div><div className="report-disclaimer"><Icon name="spark" size={15} /> Automated checks surface evidence and review prompts. They do not certify a site as fully conformant.</div></main>;
+export function ReportView(props: { audit: Audit; onNewAudit: () => void }) {
+  return <AuditReportView key={props.audit.id} {...props} />;
 }

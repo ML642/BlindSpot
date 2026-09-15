@@ -12,6 +12,7 @@ const checkSchema = z.object({
   notes: z.string().min(1).max(2000), evidenceIds: z.array(z.string()).max(12),
 });
 const issueSchema = z.object({
+  observation: z.string().min(20).max(1500),
   title: z.string().min(1).max(180), description: z.string().min(1).max(2500),
   impact: z.string().min(1).max(1500), severity: z.enum(['critical', 'serious', 'moderate', 'minor']),
   pageStateId: z.string(), selector: z.string().max(500).optional(),
@@ -31,7 +32,8 @@ const jsonSchema = {
       id: { type: 'string' }, status: { type: 'string', enum: ['needs_review', 'not_applicable', 'blocked'] },
       notes: { type: 'string' }, evidenceIds: { type: 'array', items: { type: 'string' } },
     } } },
-    findings: { type: 'array', items: { type: 'object', required: ['title', 'description', 'impact', 'severity', 'pageStateId', 'evidenceIds', 'reproduction', 'recommendation', 'wcagIds'], properties: {
+    findings: { type: 'array', items: { type: 'object', required: ['observation', 'title', 'description', 'impact', 'severity', 'pageStateId', 'evidenceIds', 'reproduction', 'recommendation', 'wcagIds'], properties: {
+      observation: { type: 'string', description: 'Specific visible or DOM condition on the cited page, with the affected element or quoted text. Not a generic risk or an unavailable test. Only report concrete possible barriers to this scenario. Put missing tests and generic advice in check notes, not findings.' },
       title: { type: 'string' }, description: { type: 'string' }, impact: { type: 'string' },
       severity: { type: 'string', enum: ['critical', 'serious', 'moderate', 'minor'] }, pageStateId: { type: 'string' },
       selector: { type: 'string' }, evidenceIds: { type: 'array', items: { type: 'string' } },
@@ -187,6 +189,7 @@ export async function runSpecialists(options: SpecialistOptions): Promise<Specia
           const wcag = item.wcagIds.map(id => refs.get(id)).filter((ref): ref is NonNullable<typeof ref> => Boolean(ref));
           accepted.push({
             id: randomUUID(), title: item.title, description: item.description, impact: item.impact,
+            observation: item.observation,
             severity: item.severity, profileIds: [playbook.id], pageStateId: item.pageStateId,
             selector: snapshot.controls.some(control => control.selector === item.selector) ? item.selector : undefined,
             evidence: evidence as Evidence[], reproduction: item.reproduction, recommendation: item.recommendation,

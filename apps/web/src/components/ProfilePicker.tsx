@@ -2,6 +2,14 @@ import { profiles, type ProfileId } from '@blindspot/shared';
 import { Icon } from './Icon';
 
 const groups = [...new Set(profiles.map((profile) => profile.group))];
+const profileCount = (group: typeof groups[number]) => profiles.filter((profile) => profile.group === group).length;
+const groupsBySize = [...groups].sort((first, second) => profileCount(second) - profileCount(first));
+const groupColumns = groupsBySize.reduce<{ groups: typeof groups; count: number }[]>((columns, group) => {
+  const column = columns.reduce((smallest, candidate, candidateIndex) => candidate.count < columns[smallest].count ? candidateIndex : smallest, 0);
+  columns[column].groups.push(group);
+  columns[column].count += profileCount(group);
+  return columns;
+}, Array.from({ length: 3 }, () => ({ groups: [], count: 0 })));
 
 export function ProfilePicker({ selected, onChange }: { selected: ProfileId[]; onChange: (next: ProfileId[]) => void }) {
   const allSelected = selected.length === profiles.length;
@@ -15,16 +23,18 @@ export function ProfilePicker({ selected, onChange }: { selected: ProfileId[]; o
         <button type="button" className="select-all" onClick={toggleAll} aria-pressed={allSelected}>{allSelected ? 'Clear all' : 'Select all'}</button>
       </div>
       <div className="profile-groups">
-        {groups.map((group) => <div className="profile-group" key={group}><p className="profile-group-title">{group}</p><div className="profile-options">
-          {profiles.filter((profile) => profile.group === group).map((profile) => {
-            const isSelected = selected.includes(profile.id);
-            return <label className={`profile-option ${isSelected ? 'is-selected' : ''}`} key={profile.id}>
-              <input type="checkbox" checked={isSelected} onChange={() => toggle(profile.id)} />
-              <span className="checkbox-box" aria-hidden="true">{isSelected && <Icon name="check" size={13} />}</span>
-              <span className="profile-copy"><span>{profile.name}</span><small>{profile.description}</small><small className="profile-lens">Agent sees: {profile.lens}</small></span>
-            </label>;
-          })}
-        </div></div>)}
+        {groupColumns.map((column, index) => <div className="profile-column" key={index}>
+          {column.groups.map((group) => <div className="profile-group" key={group}><h3>{group}</h3><div className="profile-options">
+            {profiles.filter((profile) => profile.group === group).map((profile) => {
+              const isSelected = selected.includes(profile.id);
+              return <label className={`profile-option ${isSelected ? 'is-selected' : ''}`} key={profile.id}>
+                <input type="checkbox" checked={isSelected} onChange={() => toggle(profile.id)} />
+                <span className="checkbox-box" aria-hidden="true">{isSelected && <Icon name="check" size={13} />}</span>
+                <span className="profile-copy"><span>{profile.name}</span><small>{profile.description}</small></span>
+              </label>;
+            })}
+          </div></div>)}
+        </div>)}
       </div>
       <p className={`selection-count ${selected.length === 0 ? 'is-error' : ''}`} aria-live="polite">{selected.length} of {profiles.length} profiles selected</p>
     </fieldset>

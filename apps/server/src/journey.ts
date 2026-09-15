@@ -1,4 +1,6 @@
 import { GoogleGenAI, type Content, type FunctionDeclaration, type Part } from '@google/genai';
+import { friendlyToolError } from './event-messages.js';
+import { AccessBlockedError } from './challenge.js';
 import type { JSHandle } from 'playwright';
 import type { AuditEvent, InteractionMode, JourneyStep, JourneySummary, ProfileId } from '@blindspot/shared';
 import { PERSPECTIVES } from '@blindspot/playbooks';
@@ -160,6 +162,7 @@ function screenReaderLens(): Lens {
         const { pageStateId } = await afterAction(session, 'activating the login control');
         record({ action: 'activate', detail: current, observation: announcement.spoken.join(' | ').slice(0, 600), pageStateId });
       } catch (error) {
+        if (error instanceof AuditCancelledError || error instanceof AuditLimitError || error instanceof AccessBlockedError) throw error;
         record({ action: 'activate', detail: current, observation: error instanceof Error ? error.message : String(error) });
       }
       return { summary: `Fixture-only discovery activated "${target}" with the screen reader; no Gemini review was performed.`, outcome: 'partial' };
@@ -216,7 +219,10 @@ function keyboardLens(): Lens {
             const captured = await session.press({ key: 'Enter' });
             const { pageStateId } = await afterAction(session, 'pressing Enter on the login control', captured);
             record({ action: 'press_key', detail: 'Enter', observation: (await session.focusedElement()).description, pageStateId });
-          } catch (error) { record({ action: 'press_key', detail: 'Enter', observation: error instanceof Error ? error.message : String(error) }); }
+          } catch (error) {
+            if (error instanceof AuditCancelledError || error instanceof AuditLimitError || error instanceof AccessBlockedError) throw error;
+            record({ action: 'press_key', detail: 'Enter', observation: error instanceof Error ? error.message : String(error) });
+          }
           return { summary: `Fixture-only keyboard discovery reached "${focused.description}" with Tab; no Gemini review was performed.`, outcome: 'partial' };
         }
         if (focused.tag === 'body' && i > 0) break;
@@ -282,7 +288,10 @@ function pointerLens(): Lens {
         const captured = await session.clickTarget(current.handle, login.n);
         const { pageStateId } = await afterAction(session, `clicking "${login.label}"`, captured);
         record({ action: 'click', detail: `${login.n} "${login.label}"`, observation: `Clicked ${login.label}`, pageStateId });
-      } catch (error) { record({ action: 'click', detail: login.label, observation: error instanceof Error ? error.message : String(error) }); }
+      } catch (error) {
+        if (error instanceof AuditCancelledError || error instanceof AuditLimitError || error instanceof AccessBlockedError) throw error;
+        record({ action: 'click', detail: login.label, observation: error instanceof Error ? error.message : String(error) });
+      }
       return { summary: `Fixture-only discovery clicked "${login.label}"; no Gemini review was performed.`, outcome: 'partial' };
     },
   };
@@ -348,11 +357,11 @@ export async function runJourney(session: BrowserSession, options: JourneyOption
         try {
           observation = await lens.execute(session, name, args);
         } catch (error) {
-          if (error instanceof AuditCancelledError || error instanceof AuditLimitError) throw error;
+          if (error instanceof AuditCancelledError || error instanceof AuditLimitError || error instanceof AccessBlockedError) throw error;
           const message = (error instanceof Error ? error.message : String(error)).split('\n')[0].replace(/^page\.evaluate: Error: /, '').replace(/ at eval .*$/, '').slice(0, 300);
           blocked ||= /blocked|captcha|credential|password|submission|private|restricted/i.test(message);
           ok = false;
-          observation = { text: `Error: ${message}` };
+          observation = { text: friendlyToolError(name, message) };
         }
         record({ action: name, detail: describeArgs(args), observation: observation.text.slice(0, 600), pageStateId: observation.pageStateId });
         responses.push({ functionResponse: { name, ...(call.id ? { id: call.id } : {}), response: { ok, observation: observation.text.slice(0, 12_000) }, ...(observation.image?.length ? { parts: [{ inlineData: { mimeType: 'image/jpeg', data: observation.image.toString('base64') } }] } : {}) } });
@@ -361,6 +370,7 @@ export async function runJourney(session: BrowserSession, options: JourneyOption
       pruneImages(contents);
     }
   } catch (error) {
+    if (error instanceof AccessBlockedError) throw error;
     if (error instanceof AuditCancelledError || options.signal.aborted) throw new AuditCancelledError();
     const message = error instanceof AuditLimitError ? error.message : 'Gemini navigation could not finish. Check the configured model, API key and provider quota.';
     blocked = true;

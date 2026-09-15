@@ -1,7 +1,17 @@
-import type { Audit } from '@blindspot/shared';
+import { findingCopy, findingDisposition, type Audit, type Finding } from '@blindspot/shared';
+import { artifactUrl } from './api';
+
+export function findingLocation(audit: Audit, finding: Finding, baseUrl?: string) {
+  const page = audit.pageStates.find(state => state.id === finding.pageStateId);
+  let pageUrl: string | undefined;
+  try { if (page && ['http:', 'https:'].includes(new URL(page.url).protocol)) pageUrl = page.url; } catch { /* Keep malformed legacy URLs non-clickable. */ }
+  const screenshotPath = artifactUrl(audit.id, page?.screenshotArtifactId);
+  const screenshotUrl = screenshotPath && baseUrl ? new URL(screenshotPath, baseUrl).href : screenshotPath;
+  return { page, pageUrl, screenshotUrl };
+}
 
 export function formatStatus(status: string) {
-  return status === 'needs_review' ? 'Needs review' : status.charAt(0).toUpperCase() + status.slice(1);
+  return status === 'needs_review' ? 'Needs review' : (status.charAt(0).toUpperCase() + status.slice(1)).replaceAll('_', ' ');
 }
 
 export function statusClass(status: string) {
@@ -16,7 +26,7 @@ export function humanDate(date: string) {
   }
 }
 
-export function buildMarkdown(audit: Audit) {
+export function buildMarkdown(audit: Audit, baseUrl?: string) {
   const report = audit.report;
   if (!report) return `# BlindSpot audit\n\nAudit ${audit.id} has no report yet.`;
   const lines = [
@@ -24,23 +34,29 @@ export function buildMarkdown(audit: Audit) {
     `- URL: ${audit.request.url}`,
     `- Scenario: ${audit.request.scenario}`,
     `- Status: ${formatStatus(audit.status)}`,
-    `- Run type: ${audit.demo ? 'Sample report (no Gemini call)' : 'Live agent audit'}`,
+    `- Run type: ${audit.demo ? 'Sample report, no Gemini call' : 'Live agent audit'}`,
     `- Audited: ${humanDate(audit.updatedAt)}`,
     '', '## Summary', '', report.summary, '',
-    `Scenario outcome: **${report.scenarioOutcome}**`, '',
+    `Scenario outcome: ${report.scenarioOutcome}`, '',
   ];
   if (report.journeys?.length) {
     lines.push('## Journeys', '');
     for (const journey of report.journeys) {
-      lines.push(`### ${journey.mode} (${journey.outcome})`, '', journey.summary, '');
-      journey.steps.forEach((step) => lines.push(`${step.turn}. \`${step.action}${step.detail ? ` ${step.detail}` : ''}\` — ${step.observation}`));
+      lines.push(`### ${journey.mode}, ${journey.outcome}`, '', journey.summary, '');
+      journey.steps.forEach((step) => lines.push(`${step.turn}. \`${step.action}${step.detail ? ` ${step.detail}` : ''}\`. ${step.observation}`));
       lines.push('');
     }
   }
   lines.push('## Findings', '');
   if (!report.findings.length) lines.push('No findings were returned for the selected profiles.');
   report.findings.forEach((finding) => {
-    lines.push(`### ${finding.title}`, '', `**${finding.severity} · ${finding.status}**`, '', finding.description, '', `Impact: ${finding.impact}`, '', `Profiles: ${finding.profileIds.join(', ')}`, '', 'Reproduction:', ...finding.reproduction.map((step, index) => `${index + 1}. ${step}`), '', 'Evidence:', ...finding.evidence.map((evidence) => `- ${evidence.type}: ${evidence.description}${evidence.selector ? ` (${evidence.selector})` : ''}${evidence.value ? ` — ${evidence.value}` : ''}`), '', `Recommendation: ${finding.recommendation}`, '', `WCAG: ${finding.wcag.map((criterion) => `${criterion.id} ${criterion.title}`).join('; ')}`, '');
+    const copy = findingCopy(finding);
+    lines.push(`### ${copy.title}`, '', `Next step: ${copy.recommendation}`, '', `Why it matters: ${copy.impact}`, '');
+    lines.push(`Classification: ${findingDisposition(finding)}. Certainty is separate from impact.`, '');
+    const location = findingLocation(audit, finding, baseUrl);
+    const markdownUrl = (url: string) => url.replace(/</g, '%3C').replace(/>/g, '%3E').replace(/[\r\n]/g, '');
+    lines.push('#### Issue location', '', location.pageUrl ? `[Affected page](<${markdownUrl(location.pageUrl)}>)` : 'Page URL unavailable.', '', location.screenshotUrl ? `[Screenshot of captured page state](<${markdownUrl(location.screenshotUrl)}>)` : 'Screenshot unavailable.', '', ...(finding.selector ? [`Element: ${finding.selector}`, ''] : []));
+    lines.push(`${finding.severity}, ${finding.status}`, '', finding.description, '', `Impact: ${finding.impact}`, '', `Profiles: ${finding.profileIds.join(', ')}`, '', 'Reproduction:', ...finding.reproduction.map((step, index) => `${index + 1}. ${step}`), '', 'Evidence:', ...finding.evidence.map((evidence) => `- ${evidence.type}: ${evidence.description}${evidence.selector ? `, ${evidence.selector}` : ''}${evidence.value ? `. ${evidence.value}` : ''}`), '', `Recommendation: ${finding.recommendation}`, '', `WCAG: ${finding.wcag.map((criterion) => `${criterion.id} ${criterion.title}`).join('; ')}`, '');
   });
   lines.push('## Limitations', '', ...report.limitations.map((limitation) => `- ${limitation}`));
   return lines.join('\n');
