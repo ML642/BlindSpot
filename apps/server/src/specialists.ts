@@ -144,7 +144,7 @@ async function brief(playbook: PlaybookDefinition, options: SpecialistOptions): 
 export async function runSpecialists(options: SpecialistOptions): Promise<SpecialistOutput> {
   const playbooks = getPlaybooks(options.profileIds);
   const results: SpecialistOutput[] = new Array(playbooks.length);
-  const client = options.apiKey ? new GoogleGenAI({ apiKey: options.apiKey }) : undefined;
+  const client = options.apiKey ? new GoogleGenAI({ apiKey: options.apiKey, httpOptions: { retryOptions: { attempts: 3 } } }) : undefined;
   let cursor = 0;
   const worker = async () => {
     while (cursor < playbooks.length) {

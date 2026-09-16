@@ -36,7 +36,7 @@ npm run check:cloudflare
 npm run test:cloudflare
 ```
 
-The Cloudflare tests run the packaged Worker in Miniflare, including Durable Object alarms, request validation, concurrent quota reservations, cancellation, static evidence and a real browser audit. DNS, target content and Gemini responses are controlled fixtures. They do not use a real Gemini key.
+The Cloudflare tests run Wrangler's deployment artifact in Miniflare, including Durable Object alarms, request validation, concurrent quota reservations, cancellation, static evidence and a real browser audit. DNS, target content and Gemini responses are controlled fixtures. They do not use a real Gemini key. Keep `no_bundle: true`: the build script produces the final bundle, and another bundling pass can inject helpers into serialized axe and Playwright callbacks that are unavailable inside Chromium.
 
 If Miniflare's downloaded Chromium cannot start on your system, test against a real Browser Run binding after logging in. This consumes browser time from your Cloudflare account:
 
@@ -53,4 +53,4 @@ Audits visit public HTTP/HTTPS hostnames on default ports. Browser Run guardrail
 
 Evidence is stored in 64 KB chunks, with limits of 2 MB per artifact and 12 MB per audit. Screenshots capture the viewport. Audit IDs act as unlisted report links; anyone with the link can read the report until it expires. Use this public demo for public websites. For a longer or authenticated audit, use the original server deployment.
 
-Alarms mark interrupted attempts as failed or partial instead of launching another browser after a crash. Browser sessions close before specialist model review and again in cleanup. Expiry alarms remove live reports. The static sample is generated from the local fixture at build time and is independent of live storage.
+Alarms mark interrupted attempts as failed or partial instead of launching another browser after a crash. Gemini requests allow up to three attempts for transient provider errors, within the audit's overall deadline. Browser sessions close before specialist model review and again in cleanup. Expiry alarms remove live reports. The static sample is generated from the local fixture at build time and is independent of live storage.

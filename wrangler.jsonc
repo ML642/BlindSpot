@@ -6,6 +6,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
   "minify": false,
+  "no_bundle": true,
+  "find_additional_modules": false,
   "assets": {
     "directory": "./apps/web/dist",
     "binding": "ASSETS",

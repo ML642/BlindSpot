@@ -12,8 +12,10 @@ async function createRuntime({ apiKey = 'test-only-placeholder', browser = false
     ? await (await import('wrangler')).startRemoteProxySession({ BROWSER: { type: 'browser', remote: true } }, { workerName: 'blindspot-demo-test' })
     : undefined;
   const calls = [];
+  let navigationAttempts = 0;
+  let specialistAttempts = 0;
   const options = {
-    name: 'blindspot-test', modules: true, scriptPath: 'apps/cloudflare/dist/worker.js', unsafeInspectDurableObjects: true,
+    name: 'blindspot-test', modules: true, scriptPath: '.wrangler/test-bundle/worker.js', unsafeInspectDurableObjects: true,
     compatibilityDate: '2026-09-16', compatibilityFlags: ['nodejs_compat'],
     bindings: { GEMINI_MODEL: 'gemini-3.8-flash', GEMINI_API_KEY: apiKey },
     durableObjects: { DEMO_GATE: { className: 'DemoGate', useSQLite: true }, AUDIT_RUNNER: { className: 'AuditRunner', useSQLite: true } },
@@ -25,10 +27,13 @@ async function createRuntime({ apiKey = 'test-only-placeholder', browser = false
       if (url.hostname === 'audit.example.test') return new Response(pageHtml, { headers: { 'Content-Type': 'text/html' } });
       if (url.hostname === 'generativelanguage.googleapis.com') {
         const body = await request.json();
+        const specialist = body.generationConfig?.responseMimeType === 'application/json';
+        const attempt = specialist ? ++specialistAttempts : ++navigationAttempts;
+        if (attempt === 1) return Response.json({ error: { code: 503, status: 'UNAVAILABLE', message: 'Temporary provider overload in the test fixture.' } }, { status: 503 });
         // Real model latency must not trigger the browser's ten-second idle timeout.
-        const firstModelCall = calls.filter(call => call.host === url.hostname).length === 1;
+        const firstModelCall = !specialist && attempt === 2;
         if (firstModelCall) await new Promise(resolve => setTimeout(resolve, 12_000));
-        const parts = body.generationConfig?.responseMimeType === 'application/json'
+        const parts = specialist
           ? [{ text: JSON.stringify({ summary: 'Controlled provider fixture, not a live model result.', findings: [], checks: [] }) }]
           : firstModelCall ? [{ functionCall: { name: 'list_elements', args: { kind: 'links' } } }]
           : [{ functionCall: { name: 'finish', args: { outcome: 'completed', summary: 'The navigation was read through the virtual screen reader.' } } }];
@@ -102,9 +107,11 @@ test('packaged Worker runs a real browser audit and preserves evidence with a co
     assert.ok(['completed', 'partial'].includes(audit.status), JSON.stringify(audit));
     assert.ok(audit.pageStates.length > 0, JSON.stringify(audit));
     assert.ok(audit.pageStates[0].speechArtifactId);
+    assert.ok(audit.report.profiles[0].checks.every(check => check.title !== 'axe execution'), 'axe must execute in the deployment artifact');
     assert.ok(audit.report.journeys[0].usedGemini, JSON.stringify(audit.report.journeys));
     assert.match(JSON.stringify(audit.report.journeys[0].steps), /Home/);
     assert.ok(calls.some(call => call.host === 'generativelanguage.googleapis.com'));
+    assert.equal(calls.filter(call => call.host === 'generativelanguage.googleapis.com').length, 5, 'Both model stages must retry their initial 503 once');
     const evidence = await mf.dispatchFetch(`${origin}/api/audits/${id}/artifacts/${audit.pageStates[0].screenshotArtifactId}`);
     assert.equal(evidence.headers.get('content-type'), 'image/png');
     assert.ok((await evidence.arrayBuffer()).byteLength > 1000);
