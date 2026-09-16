@@ -317,7 +317,7 @@ export async function runInteractionProbes(context: CheckerContext): Promise<Int
       const style = document.createElement('style');
       style.dataset.blindspotProbe = 'text-spacing';
       style.textContent = 'p,li,label,button,a,input,textarea,select { line-height: 1.5 !important; letter-spacing: .12em !important; word-spacing: .16em !important; }';
-      document.head.append(style);
+      document.head.appendChild(style);
       const count = measure();
       style.remove();
       return count;

@@ -1,4 +1,4 @@
-import dns from 'node:dns/promises';
+import { lookupAddresses } from './dns-lookup.js';
 import type { LookupAddress } from 'node:dns';
 import net from 'node:net';
 
@@ -84,7 +84,7 @@ export async function assertSafeUrl(value: string, options: SafeUrlOptions = {})
   }
   let addresses: LookupAddress[];
   try {
-    addresses = await dns.lookup(url.hostname, { all: true, verbatim: true });
+    addresses = await lookupAddresses(url.hostname);
   } catch {
     throw new UnsafeUrlError('The hostname could not be resolved.');
   }

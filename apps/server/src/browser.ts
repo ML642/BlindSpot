@@ -1,11 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { chromium, type Browser, type BrowserContext, type CDPSession, type JSHandle, type Page } from 'playwright';
+import type { Browser, BrowserContext, CDPSession, JSHandle, Page, Route } from 'playwright';
 import { AxeBuilder } from '@axe-core/playwright';
 import type { AuditEvent, InteractionMode, PageState, SimulationArtifact } from '@blindspot/shared';
 import { collectDomSignals, type DomSignals, type FocusStop, type Rendering } from '@blindspot/playbooks';
 import type { ArtifactStore } from './storage.js';
 import { assertSafeUrl, UnsafeUrlError } from './security.js';
-import { startNetworkProxy } from './network-proxy.js';
+import { launchLocalBrowser } from './browser-launch.js';
 import { ScreenReaderDriver } from './screen-reader.js';
 import { inPage } from './page-script.js';
 import { AccessBlockedError, detectAccessBlock } from './challenge.js';
@@ -14,6 +14,8 @@ export interface BrowserLimits {
   maxActions: number;
   maxPageStates: number;
   timeoutMs: number;
+  maxTurns?: number;
+  viewportEvidence?: boolean;
 }
 
 export interface HostOptions {
@@ -139,21 +141,25 @@ const RENDERING_LABELS: Record<Rendering, string> = {
 
 /** One Chromium process and one egress proxy shared by every journey of an audit. */
 export class BrowserHost {
-  private constructor(readonly browser: Browser, readonly origin: string, private readonly proxy: { url: string; close: () => Promise<void> } | undefined, readonly options: HostOptions) {}
+  private constructor(readonly browser: Browser, readonly origin: string, private readonly proxy: { url: string; close: () => Promise<void> } | undefined, readonly options: HostOptions, private readonly remoteRoute?: (route: Route) => Promise<void>) {}
+
+  static async remote(browser: Browser, options: HostOptions, route: (route: Route) => Promise<void>): Promise<BrowserHost> {
+    const target = await assertSafeUrl(options.startUrl);
+    return new BrowserHost(browser, target.origin, undefined, options, route);
+  }
 
   static async launch(options: HostOptions): Promise<BrowserHost> {
     const target = await assertSafeUrl(options.startUrl, { fixtureTarget: options.fixtureTarget, allowFixture: true });
-    const proxy = await startNetworkProxy({ fixtureTarget: options.fixtureTarget });
-    const browser = await chromium.launch({
-      headless: true,
-      proxy: proxy ? { server: proxy.url } : undefined,
-      args: proxy ? ['--proxy-bypass-list=<-loopback>', '--disable-quic'] : undefined,
-    });
+    const { browser, proxy } = await launchLocalBrowser(options.fixtureTarget);
 
     return new BrowserHost(browser, target.origin, proxy, options);
   }
 
-  get hasProxy(): boolean { return Boolean(this.proxy); }
+  get hasProxy(): boolean { return Boolean(this.proxy || this.remoteRoute); }
+
+  async guardNetwork(context: BrowserContext): Promise<void> {
+    if (this.remoteRoute) await context.route('**/*', this.remoteRoute);
+  }
 
   async openSession(options: SessionOptions): Promise<BrowserSession> {
     const context = await this.browser.newContext({
@@ -186,6 +192,7 @@ export class BrowserHost {
       if (!proxied && parsed.origin !== startOrigin) { await route.abort('blockedbyclient'); return; }
       await route.continue();
     });
+    await this.guardNetwork(context);
     page.on('framenavigated', (frame) => {
       if (frame === page.mainFrame()) options.emit({ type: 'navigation', journey: options.mode, message: frame.url() });
     });
@@ -539,7 +546,7 @@ export class BrowserSession {
       passes: axeRaw.passes.length, incomplete: axeRaw.incomplete.length, inapplicable: axeRaw.inapplicable.length, error: axeError,
       passedRules: axeRaw.passes.map(item => ({ id: item.id, tags: item.tags, help: item.help, nodes: [] })),
     };
-    const screenshot = await this.page.screenshot({ type: 'png', fullPage: true, animations: 'disabled' }).catch(() => Buffer.alloc(0));
+    const screenshot = await this.page.screenshot({ type: 'png', fullPage: !this.options.viewportEvidence, animations: 'disabled' }).catch(() => Buffer.alloc(0));
     const prefix = `${this.mode}-page-${this.snapshots.length + 1}`;
     const screenshotArtifact = screenshot.length ? await this.options.store.put(this.options.auditId, `${prefix}.png`, screenshot, 'image/png') : undefined;
     const preview = await previewShot(this.page, 1440).catch(() => Buffer.alloc(0));
@@ -570,6 +577,7 @@ export class BrowserSession {
       await probe.addInitScript(GUARD_SCRIPT);
       await probe.routeWebSocket('**/*', socket => socket.close());
       await probe.route('**/*', route => ['GET', 'HEAD', 'OPTIONS'].includes(route.request().method()) ? route.continue() : route.abort());
+      await this.host.guardNetwork(probe);
       const candidate = await probe.newPage();
       for (const action of this.history) { if (this.options.signal.aborted) throw new AuditCancelledError(); await action(candidate); await waitForStable(candidate); }
       const replayed = await candidate.locator('body').ariaSnapshot().catch(() => '');
@@ -607,7 +615,7 @@ export class BrowserSession {
     if (!await form.count()) throw new Error('No form was found.');
     const result = await form.evaluate((node) => {
       const formNode = node as HTMLFormElement;
-      const fields = Array.from(formNode.elements).filter((element): element is HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement => 'value' in element);
+      const fields = Array.from(formNode.elements).flatMap(element => element instanceof HTMLInputElement || element instanceof HTMLSelectElement || element instanceof HTMLTextAreaElement ? [element] : []);
       const values = fields.map((field) => ({ name: field.getAttribute('name') ?? '', type: field.getAttribute('type') ?? '', value: field.value }));
       if (values.some((field) => !['hidden', 'submit', 'button'].includes(field.type) && field.value)) return { valid: false, message: 'The form is not empty; validation was skipped.' };
       const valid = formNode.checkValidity();

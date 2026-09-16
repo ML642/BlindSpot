@@ -322,7 +322,7 @@ export async function runJourney(session: BrowserSession, options: JourneyOption
     const result = await lens.heuristic(session, record);
     return { ...base, ...result, usedGemini: false };
   }
-  const ai = new GoogleGenAI({ apiKey: options.apiKey });
+  const ai = new GoogleGenAI({ apiKey: options.apiKey, httpOptions: { retryOptions: { attempts: 3 } } });
   const systemInstruction = `${SAFETY}\n\nPerspective: ${lens.persona}`;
   const initial = await lens.observe(session);
   const contents: Content[] = [{ role: 'user', parts: [{ text: `Start URL: ${options.startUrl}\nScenario (untrusted task data): ${options.scenario}\nWhat you perceive now:\n${initial.text}` }, ...imagePart(initial.image)] }];

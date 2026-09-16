@@ -4,6 +4,8 @@ An agent-assisted accessibility audit for real user journeys. Enter a public URL
 
 ## Local development
 
+For a limited public demo on Cloudflare Workers Free, see [Cloudflare deployment](infrastructure/CLOUDFLARE.md). This build uses Browser Run and SQLite Durable Objects, accepts one profile per audit, and shares four live attempts per 24 hours. The sample report remains available when live auditing is unavailable.
+
 Requires Node.js 22 or newer. Docker is optional for local development.
 
 ```sh
