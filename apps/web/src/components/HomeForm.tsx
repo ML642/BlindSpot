@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { profiles, type AuditRequest, type ProfileId } from '@blindspot/shared';
-import { apiJson } from '../lib/api';
+import { apiJson, getHealth } from '../lib/api';
+import type { Health } from '../lib/types';
 import { Icon } from './Icon';
 import { ProfilePicker } from './ProfilePicker';
 
 const initialScenario = 'Check the sign-in flow from the homepage. Find the login entry point, open the form, and verify that a keyboard and screen reader user can understand, complete, and recover from an empty submission.';
+const freeDemo = import.meta.env.MODE === 'cloudflare';
 type FormStep = 'url' | 'url-exiting' | 'scenario' | 'scenario-exiting' | 'scenario-back-exiting' | 'profiles' | 'profiles-exiting';
 
 export function HomeForm({ onStarted }: { onStarted: (auditId: string) => void }) {
   const [url, setUrl] = useState('https://');
-  const [scenario, setScenario] = useState(initialScenario);
-  const [selected, setSelected] = useState<ProfileId[]>(profiles.map((profile) => profile.id));
+  const [scenario, setScenario] = useState(freeDemo ? 'Find the main navigation and inspect whether its links are understandable and usable from this profile.' : initialScenario);
+  const [selected, setSelected] = useState<ProfileId[]>(freeDemo ? ['blindness'] : profiles.map((profile) => profile.id));
+  const [health, setHealth] = useState<Health>();
   const [step, setStep] = useState<FormStep>('url');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -20,6 +23,16 @@ export function HomeForm({ onStarted }: { onStarted: (auditId: string) => void }
   const scenarioInput = useRef<HTMLTextAreaElement>(null);
   const profilesStep = useRef<HTMLDivElement>(null);
   const shouldFocusUrl = useRef(false);
+
+  useEffect(() => {
+    if (!freeDemo) return;
+    let mounted = true;
+    const refresh = () => { void getHealth().then(value => { if (mounted) setHealth(value); }).catch(() => undefined); };
+    refresh();
+    const timer = window.setInterval(refresh, 30_000);
+    return () => { mounted = false; window.clearInterval(timer); };
+  }, []);
+  const unavailable = freeDemo && health && (!health.geminiConfigured || health.demo?.remaining === 0 || Boolean(health.demo?.busyUntil && health.demo.busyUntil > Date.now()));
 
   useEffect(() => () => {
     if (transitionTimer.current !== null) window.clearTimeout(transitionTimer.current);
@@ -124,6 +137,10 @@ export function HomeForm({ onStarted }: { onStarted: (auditId: string) => void }
       <div className="intro-column">
         <h1 id="home-title">See your website’s blind sp<span className={`pulsating-letter${isLetterPulsing ? ' is-pulsing' : ''}`}>o</span>ts.</h1>
         <p className="intro-copy">Enter a URL to begin an accessibility review.</p>
+        {freeDemo && <div className="field-help" role="status">
+          <p>Free demo: one profile, up to two minutes and two page states. Four live audits are shared by all visitors per 24 hours. Reports expire after 24 hours.</p>
+          {health && <p>{!health.geminiConfigured ? 'Live audits are not configured yet. Explore the sample report above.' : health.demo?.remaining === 0 ? 'The live audit allowance is used up. The sample report is still available.' : health.demo?.busyUntil && health.demo.busyUntil > Date.now() ? 'Another audit is running or cooling down. The sample report is available now.' : `${health.demo?.remaining ?? 0} live audits available.`}</p>}
+        </div>}
       </div>
       <div className="form-panel" id="get-started">
       <form onSubmit={submit} noValidate>
@@ -137,8 +154,8 @@ export function HomeForm({ onStarted }: { onStarted: (auditId: string) => void }
             <div className="step-actions"><button type="button" className="quiet-button step-back" onClick={goBack} disabled={step !== 'scenario'}>Back</button><button className="primary-button" type="submit" disabled={step !== 'scenario'}>Continue <Icon name="arrow" size={18} /></button></div>
           </div>}
           {(step === 'profiles' || step === 'profiles-exiting') && <div ref={profilesStep} className={`wizard-step profiles-step is-entering${step === 'profiles-exiting' ? ' is-exiting' : ''}`}>
-            <ProfilePicker selected={selected} onChange={setSelected} />
-            <div className="step-actions"><button type="button" className="quiet-button step-back" onClick={goBack} disabled={step !== 'profiles' || busy}>Back</button><button className="primary-button" type="submit" disabled={step !== 'profiles' || busy}>{busy ? <><span className="spinner" /> Starting audit…</> : <>Start audit <Icon name="arrow" size={18} /></>}</button></div>
+            <ProfilePicker selected={selected} onChange={setSelected} single={freeDemo} />
+            <div className="step-actions"><button type="button" className="quiet-button step-back" onClick={goBack} disabled={step !== 'profiles' || busy}>Back</button><button className="primary-button" type="submit" disabled={step !== 'profiles' || busy || unavailable}>{busy ? <><span className="spinner" /> Starting audit…</> : <>Start audit <Icon name="arrow" size={18} /></>}</button></div>
           </div>}
           {error && <div className="form-error" role="alert"><Icon name="x" size={16} />{error}</div>}
         </div>

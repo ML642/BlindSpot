@@ -1,0 +1,25 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "blindspot-demo",
+  "main": "apps/cloudflare/dist/worker.js",
+  "compatibility_date": "2026-09-16",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "minify": false,
+  "assets": {
+    "directory": "./apps/web/dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"]
+  },
+  "browser": { "binding": "BROWSER" },
+  "durable_objects": {
+    "bindings": [
+      { "name": "DEMO_GATE", "class_name": "DemoGate" },
+      { "name": "AUDIT_RUNNER", "class_name": "AuditRunner" }
+    ]
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["DemoGate", "AuditRunner"] }],
+  "vars": { "GEMINI_MODEL": "gemini-3.8-flash" },
+  "observability": { "enabled": true, "head_sampling_rate": 1 }
+}

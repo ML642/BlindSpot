@@ -10,7 +10,7 @@ import { AccessBlockedError } from './challenge.js';
 
 export interface AuditJob { id: string; request: AuditRequest; geminiApiKey?: string; geminiModel: string; fixtureTarget?: string; limits: BrowserLimits; maxSpecialists?: number; }
 export interface WorkerResult { status: AuditStatus; pageStates: PageState[]; report?: AuditReport; error?: string; }
-export interface WorkerDependencies { store: ArtifactStore; emit: (event: Omit<AuditEvent, 'id' | 'timestamp'>) => void; signal: AbortSignal; checkpoint?: (result: WorkerResult) => Promise<void>; }
+export interface WorkerDependencies { store: ArtifactStore; emit: (event: Omit<AuditEvent, 'id' | 'timestamp'>) => void; signal: AbortSignal; checkpoint?: (result: WorkerResult) => Promise<void>; launchHost?: typeof BrowserHost.launch; }
 
 /**
  * One journey per interaction mode, all in the same Chromium. Every capture stores
@@ -34,7 +34,7 @@ export async function runAuditJob(job: AuditJob, dependencies: WorkerDependencie
   try {
     const modes = journeyModes(job.request.profileIds);
     emit({ type: 'status', message: `Opening Chromium for ${modes.length} journey${modes.length === 1 ? '' : 's'}: ${modes.map(mode => JOURNEY_LABELS[mode]).join(', ')}.` });
-    host = await BrowserHost.launch({ startUrl: job.request.url, fixtureTarget: job.fixtureTarget, emit });
+    host = await (dependencies.launchHost ?? BrowserHost.launch)({ startUrl: job.request.url, fixtureTarget: job.fixtureTarget, emit });
     const checkpoint = () => dependencies.checkpoint?.({ status: 'running', pageStates: pageStates(), report: report('Audit in progress. These are the checks collected so far.', 'partial') });
     const runMode = async (mode: InteractionMode) => {
       const profileIds = profilesForMode(job.request.profileIds, mode);
@@ -65,7 +65,7 @@ export async function runAuditJob(job: AuditJob, dependencies: WorkerDependencie
             await checkpoint();
           },
         });
-        journeys.push(await runJourney(session, { mode, profileIds, apiKey: job.geminiApiKey, model: job.geminiModel, scenario: job.request.scenario, startUrl: job.request.url, emit, signal, allowHeuristic: isFixtureUrl(job.request.url, job.fixtureTarget) }));
+        journeys.push(await runJourney(session, { mode, profileIds, apiKey: job.geminiApiKey, model: job.geminiModel, scenario: job.request.scenario, startUrl: job.request.url, emit, signal, maxTurns: job.limits.maxTurns, allowHeuristic: isFixtureUrl(job.request.url, job.fixtureTarget) }));
       } catch (error) {
         if (error instanceof AccessBlockedError) {
           accessBlock ??= error;
@@ -82,6 +82,8 @@ export async function runAuditJob(job: AuditJob, dependencies: WorkerDependencie
       await checkpoint();
     };
     await Promise.all(modes.map(runMode));
+    await host.close();
+    host = undefined;
     if (accessBlock) throw accessBlock;
     if (signal.aborted) throw new AuditCancelledError();
     emit({ type: 'status', message: 'Specialists are reviewing the captured journeys.' });

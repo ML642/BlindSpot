@@ -16,13 +16,26 @@
     "fixtures": "tsx fixtures/server.ts",
     "start": "npm run start -w @blindspot/server",
     "browser:install": "playwright install chromium",
-    "docs:playbooks": "tsx scripts/generate-playbook-docs.ts"
+    "docs:playbooks": "tsx scripts/generate-playbook-docs.ts",
+    "build:cloudflare": "tsx scripts/build-demo-sample.ts && npm run build -w @blindspot/web -- --mode cloudflare && node scripts/build-cloudflare.mjs",
+    "types:cloudflare": "wrangler types apps/cloudflare/worker-configuration.d.ts",
+    "check:cloudflare": "npm run types:cloudflare && tsc -p apps/cloudflare/tsconfig.json --noEmit && wrangler deploy --dry-run",
+    "dev:cloudflare": "wrangler dev",
+    "test:cloudflare": "node --test tests/cloudflare.test.mjs",
+    "deploy:cloudflare": "npm run build:cloudflare && npm run check:cloudflare && wrangler deploy"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260916.1",
     "@types/node": "^22.0.0",
     "concurrently": "^9.0.0",
+    "esbuild": "^0.28.2",
+    "miniflare": "^5.20260915.0-alpha",
+    "playwright": "^1.55.0",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",
-    "playwright": "^1.55.0"
+    "wrangler": "^4.132.0"
+  },
+  "dependencies": {
+    "@cloudflare/playwright": "^1.3.6"
   }
 }

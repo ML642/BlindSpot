@@ -1,28 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { createRequire } from 'node:module';
-import { readFile } from 'node:fs/promises';
+import { loadBundle } from './screen-reader-bundle.js';
 import type { Page } from 'playwright';
 import { inPage } from './page-script.js';
-
-let bundlePromise: Promise<{ body: string; exports: string }> | undefined;
-
-/** Load the browser build of the virtual screen reader and rewrite its ESM export into a global. */
-async function loadBundle(): Promise<{ body: string; exports: string }> {
-  bundlePromise ??= (async () => {
-    const require = createRequire(import.meta.url);
-    const file = require.resolve('@guidepup/virtual-screen-reader/browser.js');
-    const source = await readFile(file, 'utf8');
-    const match = source.match(/export\s*\{([^}]*)\};?/);
-    if (!match) throw new Error('Unexpected virtual screen reader bundle format.');
-    const body = source.replace(match[0], '').replace(/\/\/# sourceMappingURL.*$/m, '');
-    const exports = match[1].split(',').map(entry => entry.trim()).filter(Boolean).map(entry => {
-      const [local, exported] = entry.split(/\s+as\s+/);
-      return `${exported ?? local}: ${local}`;
-    }).join(', ');
-    return { body, exports };
-  })();
-  return bundlePromise;
-}
 
 export type ScreenReaderJump =
   | 'next_heading' | 'previous_heading' | 'next_landmark' | 'previous_landmark' | 'next_link' | 'previous_link'
